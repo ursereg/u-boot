@@ -441,6 +441,7 @@ dtb-$(CONFIG_MX6) += imx6ul-14x14-ddr3-arm2.dtb \
 	imx6sx-sdb.dtb \
 	imx6ul-ccimx6ulsbc.dtb \
 	imx6ul-ccimx6ulstarter.dtb \
+	imx6ul-hydrabox.dtb \
 	imx6ul-geam-kit.dtb \
 	imx6ul-isiot-emmc.dtb \
 	imx6ul-isiot-nand.dtb \
