@@ -580,6 +580,7 @@ dtb-$(CONFIG_MX6UL) += \
 	imx6ul-phycore-segin.dtb \
 	imx6ul-pico-hobbit.dtb \
 	imx6ul-pico-pi.dtb \
+	imx6ul-hydrabox.dtb \
 	imx6ul-ccimx6ulsbc.dtb \
 	imx6ul-ccimx6ulstarter.dtb
 

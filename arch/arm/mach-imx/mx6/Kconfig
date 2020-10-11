@@ -222,6 +222,17 @@ config TARGET_CCIMX6ULSTARTER
 	select MCA
 	select MTD_UBI_SKIP_REATTACH
 
+config TARGET_HYDRABOX
+	bool "Hydrabox board with Digi ConnectCore 6UL"
+	select MX6UL
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select DM
+	select DM_THERMAL
+	select BOARD_EARLY_INIT_F
+	select MCA
+	select MTD_UBI_SKIP_REATTACH
+
 config TARGET_CGTQMX6EVAL
 	bool "cgtqmx6eval"
 	select BOARD_LATE_INIT
