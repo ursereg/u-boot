@@ -4,6 +4,55 @@ Digi U-Boot RELEASE NOTES
 
 DUB-2020.04
 -----------
+dub-2020.04-r4.2, released on 2021/07/01
+	- Allow skipping fastboot lock state with 'skip-fblock-check' env var.
+	- Fix linux silent console with 'console=null' on kernel cmdline.
+	- CC8MM: enable MCU Firmware flash support for Android.
+	- CC8X: add watermarks for SECO firmware v3.8.1.
+
+
+dub-2020.04-r4.1, released on 2021/06/02
+	- Add support for the following MCA features:
+	  - Software-refreshed watchdog.
+	  - GPIO-refreshed watchdog.
+	  - RTC.
+	  - GPIO controller.
+	- Add dual boot (A/B update) support.
+	- Add Android r11 support for ConnectCore 8X and 8M Mini.
+
+
+dub-2020.04-r3.4, released on 2021/05/14
+	- CC6UL: add DDR3 calibration for 512MB variants.
+
+
+dub-2020.04-r3.3, released on 2021/04/22
+	- CC6UL: fix reporting of NAND bad blocks
+	- CC8X: add usb3 support to SBC Express
+	- Fix ATF console support
+
+
+dub-2020.04-r3.2, released on 2021/04/21
+	- CC6UL: mechanism to recover environment from old offset.
+	- CC8X: Updated SCFW to v1.7.1.1
+
+
+dub-2020.04-r3.1, released on 2021/03/08
+	- Update BSP to NXP tag 'rel_imx_5.4.70_2.3.0'.
+	- Fix support for CC8X and CC6UL SBC Express boards.
+	- Add support to ConnectCore 8M Mini.
+
+
+dub-2020.04-r2.2, released on 2021/01/18
+	- Update BSP to NXP tag 'rel_imx_5.4.47_2.2.0'.
+	- TrustFence: add support for encrypted artifacts on
+	  ~~ConnectCore 8M Nano and~~ ConnectCore 8X.
+	- Add support to ConnectCore 6UL.
+	- Add support to install firmware from a USB stick.
+	- Add support to ConnectCore 8X SBC Express 512MB variant.
+	- Remove source file system argument from 'update' command.
+	- Other minor fixes.
+
+
 dub-2020.04-r1.3, released on 2020/10/23
 	- Update BSP to NXP tag 'rel_imx_5.4.24_2.1.0'.
 	- TrustFence: add support to secure console.

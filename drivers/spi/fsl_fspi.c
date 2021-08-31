@@ -676,9 +676,9 @@ static void fspi_mem_op_read_data_fifo(struct fsl_fspi_priv *priv, u32 seqid, u8
 static void fspi_op_read(struct fsl_fspi_priv *priv, u32 *rxbuf, u32 len)
 {
 #ifdef CONFIG_FSPI_QUAD_SUPPORT
-	fspi_mem_op_read_data_fifo(priv, SEQID_QUAD_OUTPUT, rxbuf, len);
+	fspi_mem_op_read_data_fifo(priv, SEQID_QUAD_OUTPUT, (u8 *)rxbuf, len);
 #else
-	fspi_mem_op_read_data_fifo(priv, SEQID_FAST_READ, rxbuf, len);
+	fspi_mem_op_read_data_fifo(priv, SEQID_FAST_READ, (u8 *)rxbuf, len);
 #endif
 }
 #endif
@@ -1437,11 +1437,11 @@ int fsl_fspi_exec_op(struct spi_slave *slave, const struct spi_mem_op *op)
 	struct fsl_fspi_priv *priv;
 	struct udevice *bus;
 
-	bus = slave->dev->parent;
-	priv = dev_get_priv(bus);
-
 	if (!op || !slave)
 		return -EINVAL;
+
+	bus = slave->dev->parent;
+	priv = dev_get_priv(bus);
 
 	i = fsl_fspi_get_lut_index(op);
 	if (i == SEQID_END) {

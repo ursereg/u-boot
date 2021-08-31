@@ -381,6 +381,28 @@ config TRUSTY_UNLOCK_PERMISSION
 	bool "Support unlock permission protection in trusty"
 	depends on IMX_TRUSTY_OS
 
+config ANDROID_DYNAMIC_PARTITION
+	bool "Support to boot up Android with system image in logical partitions"
+
+config VIRTUAL_AB_SUPPORT
+	bool "Support virtual AB update"
+	select ANDROID_DYNAMIC_PARTITION
+
+config LOAD_KEY_FROM_RPMB
+	bool "Support load AVB public key from RPMB storage"
+	default n
+	depends on IMX_TRUSTY_OS
+
+config ANDROID_LOAD_CONNECTCORE_FDT
+	bool "Support to load the devicetree and overlays from env variables on ConnectCore SoMs, to boot Android"
+	select OF_LIBFDT_OVERLAY
+	help
+	  This option enables support to load the main devicetree file and the
+	  overlays, for ConnectCore SoMs, from the dtbo partition based on the
+	  content of environment variables.
+	  The SoM devicetree overlays are loaded based on the platform.
+	  default n
+
 endmenu
 
 menu "Hashing Support"

@@ -225,7 +225,6 @@ int checkboard(void)
 	puts("Board: iMX8QXP MEK\n");
 #endif
 
-	build_info();
 	print_bootinfo();
 
 	return 0;
@@ -386,6 +385,10 @@ int board_late_init(void)
 {
 	char *fdt_file;
 	bool m4_boot;
+
+#ifndef CONFIG_ANDROID_AUTO_SUPPORT
+	build_info();
+#endif
 
 #ifdef CONFIG_ENV_VARS_UBOOT_RUNTIME_CONFIG
 	env_set("board_name", "MEK");

@@ -118,12 +118,8 @@ const char *get_imx_type(u32 imxtype)
 		return "8MP Dual[3]";	/* Dual-core version of the imx8mp */
 	case MXC_CPU_IMX8MPL:
 		return "8MP Lite[4]";	/* Quad-core Lite version of the imx8mp */
-	case MXC_CPU_IMX8MP7:
-		return "8MP[7]";	/* Quad-core version of the imx8mp, VPU fused */
 	case MXC_CPU_IMX8MP6:
 		return "8MP[6]";	/* Quad-core version of the imx8mp, NPU fused */
-	case MXC_CPU_IMX8MP5:
-		return "8MP[5]";	/* Quad-core version of the imx8mp, ISP fused */
 	case MXC_CPU_IMX8MN:
 		return "8MNano Quad";/* Quad-core version of the imx8mn */
 	case MXC_CPU_IMX8MND:
@@ -136,6 +132,12 @@ const char *get_imx_type(u32 imxtype)
 		return "8MNano DualLite";/* Dual-core Lite version of the imx8mn */
 	case MXC_CPU_IMX8MNSL:
 		return "8MNano SoloLite";/* Single-core Lite version of the imx8mn */
+	case MXC_CPU_IMX8MNUQ:
+		return "8MNano UltraLite Quad";/* Quad-core UltraLite version of the imx8mn */
+	case MXC_CPU_IMX8MNUD:
+		return "8MNano UltraLite Dual";/* Dual-core UltraLite version of the imx8mn */
+	case MXC_CPU_IMX8MNUS:
+		return "8MNano UltraLite Solo";/* Single-core UltraLite version of the imx8mn */
 	case MXC_CPU_IMX8MM:
 		return "8MMQ";	/* Quad-core version of the imx8mm */
 	case MXC_CPU_IMX8MML:

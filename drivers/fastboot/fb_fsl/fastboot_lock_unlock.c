@@ -19,10 +19,13 @@
 #include <asm/mach-imx/hab.h>
 #endif
 
+#include <fsl_avb.h>
+
 #ifdef FASTBOOT_ENCRYPT_LOCK
 
 #include <hash.h>
 #include <fsl_caam.h>
+static __maybe_unused uint8_t zero_key_modifier[KEY_MODIFER_SIZE] = {0};
 
 //Encrypted data is 80bytes length.
 #define ENDATA_LEN 80
@@ -119,9 +122,9 @@ static FbLockState decrypt_lock_store(unsigned char* bdata) {
 }
 static inline int encrypt_lock_store(FbLockState lock, unsigned char* bdata) {
 	if (FASTBOOT_LOCK == lock)
-		strncpy((char *)bdata, "locked", strlen("locked"));
+		strncpy((char *)bdata, "locked", strlen("locked") + 1);
 	else if (FASTBOOT_UNLOCK == lock)
-		strncpy((char *)bdata, "unlocked", strlen("unlocked"));
+		strncpy((char *)bdata, "unlocked", strlen("unlocked") + 1);
 	else
 		return -1;
 	return 0;
@@ -150,13 +153,14 @@ static int generate_salt(unsigned char* salt) {
 
 }
 
-static FbLockState decrypt_lock_store(unsigned char *bdata) {
+static __maybe_unused FbLockState decrypt_lock_store(unsigned char *bdata) {
 	int p = 0, ret;
 	ALLOC_CACHE_ALIGN_BUFFER(uint8_t, plain_data, ENDATA_LEN);
 
 	caam_open();
 	ret = caam_decap_blob((uint32_t)(ulong)plain_data,
 			      (uint32_t)(ulong)bdata + ROUND(ENDATA_LEN, ARCH_DMA_MINALIGN),
+			      zero_key_modifier,
 			      ENDATA_LEN);
 	if (ret != 0) {
 		printf("Error during blob decap operation: 0x%x\n",ret);
@@ -198,7 +202,7 @@ static FbLockState decrypt_lock_store(unsigned char *bdata) {
 		return plain_data[ENDATA_LEN-1];
 }
 
-static int encrypt_lock_store(FbLockState lock, unsigned char* bdata) {
+static __maybe_unused int encrypt_lock_store(FbLockState lock, unsigned char* bdata) {
 	unsigned int p = 0;
 	int ret;
 	int salt_len = generate_salt(bdata);
@@ -217,6 +221,7 @@ static int encrypt_lock_store(FbLockState lock, unsigned char* bdata) {
 	caam_open();
 	ret = caam_gen_blob((uint32_t)(ulong)bdata,
 			(uint32_t)(ulong)bdata + ROUND(ENDATA_LEN, ARCH_DMA_MINALIGN),
+			zero_key_modifier,
 			ENDATA_LEN);
 	if (ret != 0) {
 		printf("error in caam_gen_blob:0x%x\n", ret);
@@ -372,6 +377,10 @@ FbLockState fastboot_get_lock_stat(void) {
 	FbLockState ret;
 	/* uboot used by uuu will boot from USB, always return UNLOCK state */
 	if (is_boot_from_usb())
+		return g_lockstat;
+
+	/* Assume UNLOCK state, also if "skip-fblock-check" env var is true */
+	if (env_get_yesno("skip-fblock-check") == 1)
 		return g_lockstat;
 
 	bdata = (unsigned char *)memalign(ARCH_DMA_MINALIGN, SECTOR_SIZE);

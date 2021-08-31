@@ -78,6 +78,24 @@
 			};
 		};
 	};
+
+	mca_gpio_uboot: mca_gpio {
+		compatible = "digi,mca-gpio";
+		gpio-controller;
+	};
+
+	mca_rtc_uboot: mca_rtc {
+		compatible = "digi,mca-rtc";
+	};
+
+	mca_wdt_uboot: mca_wdt {
+		compatible = "digi,mca-wdt";
+
+		soft-rfsh {
+			digi,full-reset;
+			digi,no-way-out;
+		};
+	};
 };
 
 &iomuxc {
@@ -533,6 +551,8 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usbotg1>;
 	vbus-supply = <&reg_3v3_usb_hub>;
-	dr_mode = "peripheral";
+	fsl,reset-gpio = <&gpio5 10 GPIO_ACTIVE_LOW>;
+	dr_mode = "peripheral"; /* Set "host" to use a USB mass storage */
+	disable-over-current;
 	status = "okay";
 };

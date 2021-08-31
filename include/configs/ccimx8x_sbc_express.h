@@ -67,7 +67,9 @@
 #define CONFIG_MFG_ENV_SETTINGS \
 	"mfgtool_args=setenv bootargs console=${console},${baudrate} " \
 		"root=/dev/ram0 rw quiet\0" \
-	"fastboot_dev=mmc" __stringify(CONFIG_FASTBOOT_FLASH_MMC_DEV) "\0" \
+	"fastboot_dev=mmc" __stringify(EMMC_BOOT_DEV) "\0" \
+	"emmc_dev=" __stringify(EMMC_BOOT_DEV) "\0" \
+	"sd_dev=1\0"
 
 /* Initial environment variables */
 #define CONFIG_EXTRA_ENV_SETTINGS		\
@@ -75,6 +77,7 @@
 	CONFIG_DEFAULT_NETWORK_SETTINGS		\
 	CONFIG_EXTRA_NETWORK_SETTINGS		\
 	RANDOM_UUIDS \
+	"dualboot=no\0" \
 	"dboot_kernel_var=imagegz\0" \
 	"lzipaddr=" __stringify(CONFIG_DIGI_LZIPADDR) "\0" \
 	"script=boot.scr\0" \
@@ -144,6 +147,17 @@
 			"else;" \
 			"fi;" \
 		"fi;\0" \
+	"partition_mmc_linux_dualboot=mmc rescan;" \
+		"if mmc dev ${mmcdev} 0; then " \
+			"gpt write mmc ${mmcdev} ${parts_linux_dualboot};" \
+			"mmc rescan;" \
+		"else " \
+			"if mmc dev ${mmcdev};then " \
+				"gpt write mmc ${mmcdev} ${parts_linux_dualboot};" \
+				"mmc rescan;" \
+			"else;" \
+			"fi;" \
+		"fi;\0" \
 	"recoverycmd=setenv mmcpart " CONFIG_RECOVERY_PARTITION ";" \
 		"boot\0" \
 	"recovery_file=recovery.img\0" \
@@ -157,6 +171,12 @@
 		"install_linux_fw_sd.scr;then " \
 			"source ${loadaddr};" \
 		"fi;\0" \
+	"install_linux_fw_usb=usb start;" \
+		"if load usb 0 ${loadaddr} install_linux_fw_usb.scr;then " \
+			"source ${loadaddr};" \
+		"fi;\0" \
+	"bootcmd_mfg=fastboot " __stringify(CONFIG_FASTBOOT_USB_DEV) "\0" \
+	"active_system=linux_a\0" \
 	""	/* end line */
 
 #undef CONFIG_BOOTCOMMAND

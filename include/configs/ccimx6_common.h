@@ -204,9 +204,10 @@
 #define CONFIG_SUPPORTED_SOURCES	((1 << SRC_TFTP) | \
 					 (1 << SRC_NFS) | \
 					 (1 << SRC_MMC) | \
+					 (1 << SRC_USB) | \
 					 (1 << SRC_RAM))
 #define CONFIG_SUPPORTED_SOURCES_NET	"tftp|nfs"
-#define CONFIG_SUPPORTED_SOURCES_BLOCK	"mmc"
+#define CONFIG_SUPPORTED_SOURCES_BLOCK	"mmc|usb"
 #define CONFIG_SUPPORTED_SOURCES_RAM	"ram"
 
 /* Digi boot command 'dboot' */
@@ -322,5 +323,7 @@
 #undef CONFIG_SYS_CBSIZE
 #define CONFIG_SYS_CBSIZE              1024
 #define CONFIG_SYS_HZ                  1000
+
+#define FSL_FASTBOOT_FB_DEV "mmc"
 
 #endif	/* CCIMX6_COMMON_CONFIG_H */

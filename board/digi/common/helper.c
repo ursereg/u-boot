@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017-2020 by Digi International Inc.
+ *  Copyright (C) 2017 by Digi International Inc.
  *  All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify it
@@ -10,7 +10,10 @@
 #include <console.h>
 #include <gzip.h>
 #include <linux/errno.h>
+#include <fsl_sec.h>
+#include <asm/mach-imx/hab.h>
 #include <malloc.h>
+#include <mapmem.h>
 #include <nand.h>
 #include <version.h>
 #include <watchdog.h>
@@ -59,6 +62,10 @@ extern int tftp_timeout_count_max;
 extern unsigned long net_start_again_timeout;
 int DownloadingAutoScript = 0;
 int RunningAutoScript = 0;
+#endif
+
+#ifdef CONFIG_HAS_TRUSTFENCE
+int rng_swtest_status = 0;
 #endif
 
 int confirm_msg(char *msg)
@@ -157,6 +164,31 @@ static int write_file_fs_otf(int src, char *filename, char *devpartno)
 }
 #endif /* CONFIG_CMD_UPDATE */
 
+static int get_default_devpartno(int src, char *devpartno)
+{
+	char *dev, *part;
+
+	switch (src) {
+	case SRC_MMC:
+		dev = env_get("mmcdev");
+		if (dev == NULL)
+			return -1;
+		part = env_get("mmcpart");
+		/* If mmcpart not defined, default to 1 */
+		if (part == NULL)
+			sprintf(devpartno, "%s:1", dev);
+		else
+			sprintf(devpartno, "%s:%s", dev, part);
+		break;
+	case SRC_USB:	// TODO
+	case SRC_SATA:	// TODO
+	default:
+		return -1;
+	}
+
+	return 0;
+}
+
 #if defined(CONFIG_CMD_UPDATE) || defined(CONFIG_CMD_DBOOT)
 bool is_image_compressed(void)
 {
@@ -173,6 +205,7 @@ int get_source(int argc, char * const argv[], struct load_fw *fwinfo)
 {
 	int i;
 	char *src;
+	char def_devpartno[] = "0:1";
 #ifdef CONFIG_CMD_MTDPARTS
 	struct mtd_device *dev;
 	u8 pnum;
@@ -205,11 +238,15 @@ int get_source(int argc, char * const argv[], struct load_fw *fwinfo)
 	case SRC_USB:
 	case SRC_MMC:
 	case SRC_SATA:
-		/* Get device:partition and file system */
-		if (argc > 3)
-			fwinfo->devpartno = (char *)argv[3];
-		if (argc > 4)
-			fwinfo->fs = (char *)argv[4];
+		/* Get device:partition */
+		if (argc > 3) {
+			strncpy(fwinfo->devpartno, argv[3],
+				sizeof(fwinfo->devpartno));
+		} else {
+			get_default_devpartno(fwinfo->src, def_devpartno);
+			strncpy(fwinfo->devpartno, def_devpartno,
+				sizeof(fwinfo->devpartno));
+		}
 		break;
 	case SRC_NAND:
 #ifdef CONFIG_CMD_MTDPARTS
@@ -257,25 +294,32 @@ const char *get_source_string(int src)
 
 int get_fw_filename(int argc, char * const argv[], struct load_fw *fwinfo)
 {
+	int filename_index = 4;
+
 	switch (fwinfo->src) {
 	case SRC_TFTP:
 	case SRC_NFS:
 		if (argc > 3) {
-			fwinfo->filename = argv[3];
+			strncpy(fwinfo->filename, argv[3],
+				sizeof(fwinfo->filename));
 			return 0;
 		}
 		break;
 	case SRC_MMC:
 	case SRC_USB:
 	case SRC_SATA:
-		if (argc > 5) {
-			fwinfo->filename = argv[5];
-			return 0;
-		}
-		break;
 	case SRC_NAND:
+		/*
+		 * For backwards compatibility, check if old 'fs' parameter
+		 * was passed before the filename.
+		 */
+		if ((argc > 5) &&
+		    (!strcmp(argv[4], "fat") || !strcmp(argv[4], "ext4")))
+			filename_index++;
+
 		if (argc > 4) {
-			fwinfo->filename = argv[4];
+			strncpy(fwinfo->filename, argv[filename_index],
+				sizeof(fwinfo->filename));
 			return 0;
 		}
 		break;
@@ -319,31 +363,6 @@ char *get_default_filename(char *partname, int cmd)
 	}
 
 	return NULL;
-}
-
-int get_default_devpartno(int src, char *devpartno)
-{
-	char *dev, *part;
-
-	switch (src) {
-	case SRC_MMC:
-		dev = env_get("mmcdev");
-		if (dev == NULL)
-			return -1;
-		part = env_get("mmcpart");
-		/* If mmcpart not defined, default to 1 */
-		if (part == NULL)
-			sprintf(devpartno, "%s:1", dev);
-		else
-			sprintf(devpartno, "%s:%s", dev, part);
-		break;
-	case SRC_USB:	// TODO
-	case SRC_SATA:	// TODO
-	default:
-		return -1;
-	}
-
-	return 0;
 }
 
 #ifdef CONFIG_DIGI_UBI
@@ -429,10 +448,11 @@ int load_firmware(struct load_fw *fwinfo, char *msg)
 	}
 
 	/* Use default values if not provided */
-	if (NULL == fwinfo->devpartno) {
+	if (strlen(fwinfo->devpartno) == 0) {
 		if (get_default_devpartno(fwinfo->src, def_devpartno))
 			strcpy(def_devpartno, "0:1");
-		fwinfo->devpartno = def_devpartno;
+		strncpy(fwinfo->devpartno, def_devpartno,
+			sizeof(fwinfo->devpartno));
 	}
 
 	/*
@@ -834,3 +854,321 @@ __weak bool validate_bootloader_image(void *loadaddr)
 	/* Accept all bootloaders by default */
 	return true;
 }
+
+#ifdef CONFIG_HAS_TRUSTFENCE
+#define RNG_FAIL_EVENT_SIZE 36
+
+static uint8_t habv4_known_rng_fail_events[][RNG_FAIL_EVENT_SIZE] = {
+	{ 0xdb, 0x00, 0x24, 0x42,  0x69, 0x30, 0xe1, 0x1d,
+	  0x00, 0x80, 0x00, 0x02,  0x40, 0x00, 0x36, 0x06,
+	  0x55, 0x55, 0x00, 0x03,  0x00, 0x00, 0x00, 0x00,
+	  0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+	  0x00, 0x00, 0x00, 0x01 },
+	{ 0xdb, 0x00, 0x24, 0x42,  0x69, 0x30, 0xe1, 0x1d,
+	  0x00, 0x04, 0x00, 0x02,  0x40, 0x00, 0x36, 0x06,
+	  0x55, 0x55, 0x00, 0x03,  0x00, 0x00, 0x00, 0x00,
+	  0x00, 0x00, 0x00, 0x00,  0x00, 0x00, 0x00, 0x00,
+	  0x00, 0x00, 0x00, 0x01 },
+};
+
+extern enum hab_status hab_rvt_report_event(enum hab_status status, uint32_t index,
+					    uint8_t *event, size_t *bytes);
+
+int hab_event_warning_check(uint8_t *event, size_t *bytes)
+{
+	int ret = SW_RNG_TEST_NA, i;
+	bool is_rng_fail_event = false;
+#ifdef CONFIG_RNG_SW_TEST
+	uint8_t *res_ptr;
+	uint32_t res_addr = env_get_ulong("loadaddr", 16, CONFIG_LOADADDR);
+#endif
+
+	/* Get HAB Event warning data */
+	hab_rvt_report_event(HAB_WARNING, 0, event, bytes);
+
+	/* Compare HAB event warning data with known Warning issues */
+	for (i = 0; i < ARRAY_SIZE(habv4_known_rng_fail_events); i++) {
+		if (memcmp(event, habv4_known_rng_fail_events[i],
+			   RNG_FAIL_EVENT_SIZE) == 0) {
+			is_rng_fail_event = true;
+			break;
+		}
+	}
+
+	if (is_rng_fail_event) {
+#ifdef CONFIG_RNG_SW_TEST
+		printf("RNG:   self-test failure detected, will run software self-test\n");
+		res_ptr = map_sysmem(res_addr, 32);
+		ret = rng_sw_test(res_ptr);
+
+		if (ret == 0)
+			ret = SW_RNG_TEST_PASSED;
+		else
+#endif
+			ret = SW_RNG_TEST_FAILED;
+	}
+
+	return ret;
+}
+#endif /* CONFIG_HAS_TRUSTFENCE */
+
+#ifdef CONFIG_ANDROID_LOAD_CONNECTCORE_FDT
+#include <dt_table.h>
+
+/**
+ * Dump information about the content of the dtbo partition
+ */
+void dump_fdt_part_info(struct dt_table_header *dtt_header)
+{
+#ifdef DEBUG_LOAD_CC_FDT
+	int i;
+	struct dt_table_entry *dtt_entry;
+	u32 entry_count;
+
+	dtt_entry = (struct dt_table_entry *)((ulong)dtt_header +
+			be32_to_cpu(dtt_header->dt_entries_offset));
+
+	entry_count = be32_to_cpu(dtt_header->dt_entry_count);
+
+	for (i = 0; i < entry_count; i++) {
+		printf("Entry %d - fname: %s\n", i, dtt_entry->fdt_fname);
+		dtt_entry++;
+	}
+#endif
+}
+
+/**
+ * Load into memory the fdt blob that matches the provided name.
+ *
+ * @param dt_fname file name of the devicetree to load
+ * @param fdt_addr memory address where the dt will be loaded
+ * @param dtt_header pointer to the dtbo partition header in memory
+ *
+ * @return the size in bytes of the device tree loaded
+ */
+u32 _load_fdt_by_name(char *dt_fname, ulong fdt_addr,
+		      struct dt_table_header *dtt_header)
+{
+	struct dt_table_entry *dtt_entry;
+	u32 i, entry_count, fdt_size = 0, fdt_offset;
+
+	dtt_entry = (struct dt_table_entry *)((ulong)dtt_header +
+			be32_to_cpu(dtt_header->dt_entries_offset));
+
+	entry_count = be32_to_cpu(dtt_header->dt_entry_count);
+
+	for (i = 0; i < entry_count; i++) {
+		if (!(strncmp(dtt_entry->fdt_fname,
+			      dt_fname, strlen(dt_fname)))) {
+			fdt_size = be32_to_cpu(dtt_entry->dt_size);
+			fdt_offset = be32_to_cpu(dtt_entry->dt_offset);
+
+			memcpy((void *)fdt_addr,
+			       (void *)((ulong)dtt_header + fdt_offset),
+			       fdt_size);
+			break;
+		}
+		dtt_entry++;
+	}
+
+	return fdt_size;
+}
+
+/**
+ * Load into memory the fdt blob that matches the provided name.
+ *
+ * @param index index of the of the devicetree entry to load
+ * @param fdt_addr memory address where the dt will be loaded
+ * @param dtt_header pointer to the dtbo partition header in memory
+ *
+ * @return 0 on success, error code otherwise
+ */
+int load_fdt_by_index(int index, ulong fdt_addr,
+		      struct dt_table_header *dtt_header)
+{
+	struct dt_table_entry *dtt_entry;
+	u32 entry_count, fdt_size, fdt_offset;
+
+	dtt_entry = (struct dt_table_entry *)((ulong)dtt_header +
+			be32_to_cpu(dtt_header->dt_entries_offset));
+
+	entry_count = be32_to_cpu(dtt_header->dt_entry_count);
+
+	if (index >= entry_count)
+		return -EINVAL;
+
+	dtt_entry += index;
+	fdt_size = be32_to_cpu(dtt_entry->dt_size);
+	fdt_offset = be32_to_cpu(dtt_entry->dt_offset);
+
+	memcpy((void *)fdt_addr,
+	       (void *)((ulong) dtt_header + fdt_offset), fdt_size);
+
+	return 0;
+}
+
+/**
+ * Wrapper arround _load_fdt_by_name to return 0 on success or the error code
+ * on failure
+ */
+int load_fdt_by_name(char *dt_fname, ulong fdt_addr,
+		     struct dt_table_header *dtt_header)
+{
+	if (!_load_fdt_by_name(dt_fname, fdt_addr, dtt_header))
+		return -EINVAL;
+
+	return 0;
+}
+
+/**
+ * Load and apply the device tree overlays included in the provided variable
+ *
+ * @param overlays_var environment variable containing the DT overlay list
+ * @param fdt_addr memory address of the DT to apply the overlays
+ * @param dtt_header pointer to the dtbo partition header in memory
+ *
+ * @return 0 on success, error code otherwise
+ */
+int apply_fdt_overlays(char *overlays_var, ulong fdt_addr,
+		       struct dt_table_header *dtt_header)
+{
+#define DELIM_OV_FILE		","
+#ifdef CONFIG_OF_LIBFDT_OVERLAY
+	char cmd_buf[CONFIG_SYS_CBSIZE];
+	char *env_overlay_list = NULL;
+	char *overlay_list_copy = NULL;
+	char *overlay_list = NULL;
+	char *overlay = NULL;
+	char *overlay_desc = NULL;
+	int root_node;
+	ulong loadaddr =
+	    env_get_ulong("initrd_addr", 16, CONFIG_DIGI_UPDATE_ADDR);
+	u32 fdt_size;
+
+	sprintf(cmd_buf, "fdt addr %lx", fdt_addr);
+	if (run_command(cmd_buf, 0)) {
+		printf("Failed to set base fdt address to %lx\n", fdt_addr);
+		return -EINVAL;
+	}
+	/* get the right fdt_blob from the global working_fdt */
+	gd->fdt_blob = working_fdt;
+	root_node = fdt_path_offset(gd->fdt_blob, "/");
+
+	/* Copy the variable to avoid modifying it in memory */
+	env_overlay_list = env_get(overlays_var);
+	if (env_overlay_list) {
+		printf("\n## Applying device tree overlays in variable '%s':\n", overlays_var);
+		overlay_list_copy = strdup(env_overlay_list);
+		if (overlay_list_copy) {
+			overlay_list = overlay_list_copy;
+			overlay = strtok(overlay_list, DELIM_OV_FILE);
+		} else {
+			printf("\n## Not enough memory to duplicate '%s'\n", overlays_var);
+			return -ENOMEM;
+		}
+	} else {
+		printf("\n## No device tree overlays present in variable '%s'\n", overlays_var);
+	}
+
+	while (overlay != NULL) {
+		/* Load the overlay */
+		fdt_size = _load_fdt_by_name(overlay, loadaddr, dtt_header);
+		if (!fdt_size) {
+			printf("Error loading overlay %s\n", overlay);
+			free(overlay_list_copy);
+			return -EINVAL;
+		}
+
+		/* Resize the base fdt to make room for the overlay */
+		sprintf(cmd_buf, "fdt resize %x", fdt_size);
+		if (run_command(cmd_buf, 0)) {
+			printf("Error failed to resize fdt\n");
+			free(overlay_list_copy);
+			return -EINVAL;
+		}
+
+		/* Apply the overlay */
+		sprintf(cmd_buf, "fdt apply %lx", loadaddr);
+		if (run_command(cmd_buf, 0)) {
+			printf("Error failed to apply overlay %s\n", overlay);
+			free(overlay_list_copy);
+			return -EINVAL;
+		}
+
+		/* Search for an overlay description */
+		overlay_desc = (char *)fdt_getprop(gd->fdt_blob, root_node,
+						   "overlay-description", NULL);
+
+		/* Print the overlay filename (and description if available) */
+		printf("-> %-50s", overlay);
+		if (overlay_desc) {
+			printf("%s", overlay_desc);
+			/* remove property and reset pointer after printing */
+			fdt_delprop((void *)gd->fdt_blob, root_node,
+				    "overlay-description");
+			overlay_desc = NULL;
+		}
+
+		overlay = strtok(NULL, DELIM_OV_FILE);
+		if (overlay)
+			printf("\n");
+	}
+	printf("\n");
+
+	free(overlay_list_copy);
+
+	return 0;
+#else
+	printf("Error overlay support not supported in this build\n");
+
+	return -ENOSUP;
+#endif /* CONFIG_OF_LIBFDT_OVERLAY */
+}
+
+/**
+ * Load the devicetree and the overlays from the content of environment
+ * varialbes
+ */
+int connectcore_load_fdt(ulong fdt_addr, struct dt_table_header *dtt_header)
+{
+#define MAIN_DTB_IDX	0
+	char *fdt_file;
+	int ret;
+	char *som_overlays_override;
+
+	dump_fdt_part_info(dtt_header);
+
+	fdt_file = env_get("fdt_file");
+	if (fdt_file) {
+		ret = load_fdt_by_name(fdt_file, fdt_addr, dtt_header);
+		if (ret) {
+			printf("Error loading devicetree file %s\n", fdt_file);
+			return -EINVAL;
+		}
+	} else {
+		ret = load_fdt_by_index(MAIN_DTB_IDX, fdt_addr, dtt_header);
+		if (ret) {
+			printf("Error loading devicetree with index %d\n",
+			       MAIN_DTB_IDX);
+			return -EINVAL;
+		}
+	}
+
+	som_overlays_override = env_get("som_overlays_override");
+	ret = apply_fdt_overlays(som_overlays_override ?
+				 "som_overlays_override" : "som_overlays",
+				 fdt_addr, dtt_header);
+	if (ret) {
+		printf("Error loading 'som_overlays' var overlays\n");
+		return -EINVAL;
+	}
+
+	ret = apply_fdt_overlays("overlays", fdt_addr, dtt_header);
+	if (ret) {
+		printf("Error loading 'overlays' var overlays\n");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+#endif /* CONFIG_ANDROID_LOAD_CONNECTCORE_FDT */

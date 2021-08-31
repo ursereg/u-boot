@@ -71,8 +71,8 @@
 #define CONFIG_TRUSTFENCE_SRK_N_REVOKE_KEYS		3
 #define CONFIG_TRUSTFENCE_SRK_REVOKE_BANK		0
 #define CONFIG_TRUSTFENCE_SRK_REVOKE_WORD		11
-#define CONFIG_TRUSTFENCE_SRK_REVOKE_MASK		0xFF
-#define CONFIG_TRUSTFENCE_SRK_REVOKE_OFFSET		0
+#define CONFIG_TRUSTFENCE_SRK_REVOKE_MASK		0xF
+#define CONFIG_TRUSTFENCE_SRK_REVOKE_OFFSET		8
 
 /* Secure JTAG configs
  * Currently not supported only place holder
@@ -165,9 +165,10 @@
 #define CONFIG_SUPPORTED_SOURCES	((1 << SRC_TFTP) | \
 					 (1 << SRC_NFS) | \
 					 (1 << SRC_MMC) | \
+					 (1 << SRC_USB) | \
 					 (1 << SRC_RAM))
 #define CONFIG_SUPPORTED_SOURCES_NET	"tftp|nfs"
-#define CONFIG_SUPPORTED_SOURCES_BLOCK	"mmc"
+#define CONFIG_SUPPORTED_SOURCES_BLOCK	"mmc|usb"
 #define CONFIG_SUPPORTED_SOURCES_RAM	"ram"
 
 /* Digi boot command 'dboot' */
@@ -310,7 +311,45 @@
 	"name=userdata,size=-,uuid=${part10_uuid};" \
 	"\""
 
+#define LINUX_DUALBOOT_4GB_PARTITION_TABLE \
+	"\"uuid_disk=${uuid_disk};" \
+	"start=2MiB," \
+	"name=linux_a,size=64MiB,uuid=${part1_uuid};" \
+	"name=linux_b,size=64MiB,uuid=${part2_uuid};" \
+	"name=rootfs_a,size=1536MiB,uuid=${part3_uuid};" \
+	"name=rootfs_b,size=1536MiB,uuid=${part4_uuid};" \
+	"name=safe,size=16MiB,uuid=${part5_uuid};" \
+	"name=safe2,size=16MiB,uuid=${part6_uuid};" \
+	"name=data,size=-,uuid=${part7_uuid};" \
+	"\""
+
+#define LINUX_DUALBOOT_8GB_PARTITION_TABLE \
+	"\"uuid_disk=${uuid_disk};" \
+	"start=2MiB," \
+	"name=linux_a,size=64MiB,uuid=${part1_uuid};" \
+	"name=linux_b,size=64MiB,uuid=${part2_uuid};" \
+	"name=rootfs_a,size=3GiB,uuid=${part3_uuid};" \
+	"name=rootfs_b,size=3GiB,uuid=${part4_uuid};" \
+	"name=safe,size=16MiB,uuid=${part5_uuid};" \
+	"name=safe2,size=16MiB,uuid=${part6_uuid};" \
+	"name=data,size=-,uuid=${part7_uuid};" \
+	"\""
+
+#define LINUX_DUALBOOT_16GB_PARTITION_TABLE \
+	"\"uuid_disk=${uuid_disk};" \
+	"start=2MiB," \
+	"name=linux_a,size=64MiB,uuid=${part1_uuid};" \
+	"name=linux_b,size=64MiB,uuid=${part2_uuid};" \
+	"name=rootfs_a,size=7GiB,uuid=${part3_uuid};" \
+	"name=rootfs_b,size=7GiB,uuid=${part4_uuid};" \
+	"name=safe,size=16MiB,uuid=${part5_uuid};" \
+	"name=safe2,size=16MiB,uuid=${part6_uuid};" \
+	"name=data,size=-,uuid=${part7_uuid};" \
+	"\""
+
 /* Partition defines */
 #define CONFIG_RECOVERY_PARTITION	"2"
+
+#define FSL_FASTBOOT_FB_DEV "mmc"
 
 #endif /* CCIMX8X_COMMON_H */

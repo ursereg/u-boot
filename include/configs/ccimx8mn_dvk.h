@@ -26,8 +26,19 @@
 #define CONFIG_MALLOC_F_ADDR		0x184000 /* malloc f used before GD_FLG_FULL_MALLOC_INIT set */
 
 #undef CONFIG_DM_MMC
+#undef CONFIG_DM_PMIC
+#undef CONFIG_DM_PMIC_PFUZE100
+
+#define CONFIG_POWER
+#define CONFIG_POWER_I2C
+#define CONFIG_POWER_BD71837
+#define CONFIG_POWER_PCA9450
+
+#define CONFIG_SYS_I2C
 
 #endif
+
+#define EMMC_BOOT_PART_OFFSET		(32 * SZ_1K)
 
 /* Serial */
 #define CONFIG_MXC_UART
@@ -52,6 +63,7 @@
 
 /* RAM */
 #define PHYS_SDRAM_SIZE			0x40000000 /* 1GB DDR */
+#define AUTODETECT_RAM_SIZE
 
 /* USDHC */
 #define CONFIG_SYS_FSL_USDHC_NUM	2
@@ -64,17 +76,18 @@
 #define CONFIG_MFG_ENV_SETTINGS \
 	"mfgtool_args=setenv bootargs console=${console},${baudrate} " \
 		"root=/dev/ram0 rw quiet\0" \
-	"fastboot_dev=mmc" __stringify(CONFIG_FASTBOOT_FLASH_MMC_DEV) "\0" \
+	"fastboot_dev=mmc" __stringify(EMMC_BOOT_DEV) "\0" \
 	"initrd_addr=0x43800000\0" \
 	"initrd_high=0xffffffffffffffff\0" \
-	"emmc_dev=1\0" \
-	"sd_dev=0\0"
+	"emmc_dev=" __stringify(EMMC_BOOT_DEV) "\0" \
+	"sd_dev=1\0"
 
 /* Initial environment variables */
 #define CONFIG_EXTRA_ENV_SETTINGS		\
 	CONFIG_MFG_ENV_SETTINGS 		\
 	CONFIG_DEFAULT_NETWORK_SETTINGS		\
 	RANDOM_UUIDS \
+	"dualboot=no\0" \
 	"dboot_kernel_var=imagegz\0" \
 	"lzipaddr=" __stringify(CONFIG_DIGI_LZIPADDR) "\0" \
 	"script=boot.scr\0" \
@@ -143,6 +156,17 @@
 			"else;" \
 			"fi;" \
 		"fi;\0" \
+	"partition_mmc_linux_dualboot=mmc rescan;" \
+		"if mmc dev ${mmcdev} 0; then " \
+			"gpt write mmc ${mmcdev} ${parts_linux_dualboot};" \
+			"mmc rescan;" \
+		"else " \
+			"if mmc dev ${mmcdev};then " \
+				"gpt write mmc ${mmcdev} ${parts_linux_dualboot};" \
+				"mmc rescan;" \
+			"else;" \
+			"fi;" \
+		"fi;\0" \
 	"recoverycmd=setenv mmcpart " CONFIG_RECOVERY_PARTITION ";" \
 		"boot\0" \
 	"recovery_file=recovery.img\0" \
@@ -156,12 +180,34 @@
 		"install_linux_fw_sd.scr;then " \
 			"source ${loadaddr};" \
 		"fi;\0" \
+	"install_linux_fw_usb=usb start;" \
+		"if load usb 0 ${loadaddr} install_linux_fw_usb.scr;then " \
+			"source ${loadaddr};" \
+		"fi;\0" \
+	"bootcmd_mfg=fastboot " __stringify(CONFIG_FASTBOOT_USB_DEV) "\0" \
+	"active_system=linux_a\0" \
 	""	/* end line */
 
 #undef CONFIG_BOOTCOMMAND
+#ifdef CONFIG_SECURE_BOOT
+/*
+ * Authenticate bootscript before running it. IVT offset is at
+ * ${filesize} - CONFIG_CSF_SIZE - IVT_SIZE (0x20)
+ * Use 0x2000 as CSF_SIZE, as this is the value used by the script
+ * to sign / encrypt the bootscript
+ */
+#define CONFIG_BOOTCOMMAND \
+	"if run loadscript; then " \
+		"setexpr bs_ivt_offset ${filesize} - 0x2020;" \
+		"if hab_auth_img ${loadaddr} ${filesize} ${bs_ivt_offset}; then " \
+			"source ${loadaddr};" \
+		"fi; " \
+	"fi;"
+#else
 #define CONFIG_BOOTCOMMAND \
 	"if run loadscript; then " \
 		"source ${loadaddr};" \
 	"fi;"
 
+#endif	/* CONFIG_SECURE_BOOT */
 #endif /* __CCIMX8MN_DVK_H */

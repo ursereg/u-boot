@@ -129,36 +129,6 @@ int board_early_init_f(void)
 #ifdef CONFIG_FEC_MXC
 #include <miiphy.h>
 
-static void enet_device_phy_reset(int iface)
-{
-	struct gpio_desc desc;
-	struct udevice *dev = NULL;
-	char *reset_gpio[] = { "gpio3_18", "gpio3_22" };
-	char *reset_gpio_lbl[] = { "enet0_reset", "enet1_reset" };
-	int ret;
-
-	if (iface > 1) {
-		printf("Error: invalid CONFIG_FEC_ENET_DEV\n");
-		return;
-	}
-
-	ret = dm_gpio_lookup_name(reset_gpio[iface], &desc);
-	if (ret)
-		return;
-
-	ret = dm_gpio_request(&desc, reset_gpio_lbl[iface]);
-	if (ret)
-		return;
-
-	dm_gpio_set_dir_flags(&desc, GPIOD_IS_OUT);
-	dm_gpio_set_value(&desc, 0);
-	udelay(50);
-	dm_gpio_set_value(&desc, 1);
-	dm_gpio_free(dev, &desc);
-
-	udelay(10);
-}
-
 int board_phy_config(struct phy_device *phydev)
 {
 	/* Set RGMII IO voltage to 1.8V */
@@ -178,30 +148,6 @@ int board_phy_config(struct phy_device *phydev)
 
 	return 0;
 }
-
-static int setup_fec(int ind)
-{
-	struct gpio_desc enet_pwr;
-	int ret;
-
-	/* Power up the PHY */
-	ret = dm_gpio_lookup_name("gpio3_13", &enet_pwr);
-	if (ret)
-		return -1;
-
-	ret = dm_gpio_request(&enet_pwr, "enet0_pwr");
-	if (ret)
-		return -1;
-
-	dm_gpio_set_dir_flags(&enet_pwr, GPIOD_IS_OUT);
-	dm_gpio_set_value(&enet_pwr, 1);
-	mdelay(1);	/* PHY power up time */
-
-	/* Reset ENET PHY */
-	enet_device_phy_reset(ind);
-
-	return 0;
-}
 #endif
 
 #ifdef CONFIG_MXC_GPIO
@@ -214,6 +160,11 @@ static void board_gpio_init(void)
 }
 #endif
 
+int mmc_map_to_kernel_blk(int devno)
+{
+	return devno;
+}
+
 int checkboard(void)
 {
 	board_version = get_carrierboard_version();
@@ -222,7 +173,6 @@ int checkboard(void)
 	print_som_info();
 	print_carrierboard_info();
 	print_bootinfo();
-	build_info();
 
 #ifdef SCI_FORCE_ABORT
 	sc_rpc_msg_t abort_msg;
@@ -336,20 +286,33 @@ int board_usb_cleanup(int index, enum usb_init_type init)
 }
 #endif
 
-int board_power_led_init(void)
+static int board_power_led_init(void)
 {
-	/* MCA_IO13 (bank 1, bit 5) is connected to POWER_LED */
-	int prw_led_gpiobank = 1;
-	int pwr_led_gpiobit = (1 << 5);
+	/* MCA_IO13 is connected to POWER_LED */
+	const char *name = "MCA-GPIO_13";
+	struct gpio_desc desc;
 	int ret;
 
-	/* Configure as output */
-	ret = mca_update_bits(MCA_GPIO_DIR_0 + prw_led_gpiobank, pwr_led_gpiobit, pwr_led_gpiobit);
-	if (ret != 0)
-		return ret;
+	ret = dm_gpio_lookup_name(name, &desc);
+	if (ret)
+		goto error;
 
-	/* Turn on POWER_LED (high) */
-	ret = mca_update_bits(MCA_GPIO_DATA_0 + prw_led_gpiobank, pwr_led_gpiobit, pwr_led_gpiobit);
+	ret = dm_gpio_request(&desc, "Power LED");
+	if (ret)
+		goto error;
+
+	ret = dm_gpio_set_dir_flags(&desc, GPIOD_IS_OUT);
+	if (ret)
+		goto errfree;
+
+	ret = dm_gpio_set_value(&desc, 1);
+	if (ret)
+		goto errfree;
+
+	return 0;
+errfree:
+	dm_gpio_free(NULL, &desc);
+error:
 	return ret;
 }
 
@@ -362,10 +325,6 @@ int board_init(void)
 
 #ifdef CONFIG_MXC_GPIO
 	board_gpio_init();
-#endif
-
-#ifdef CONFIG_FEC_MXC
-	setup_fec(CONFIG_FEC_ENET_DEV);
 #endif
 
 #if defined(CONFIG_USB)
@@ -420,6 +379,7 @@ void platform_default_environment(void)
 
 int board_late_init(void)
 {
+	build_info();
 	/* SOM late init */
 	ccimx8_late_init();
 
@@ -428,3 +388,12 @@ int board_late_init(void)
 
 	return 0;
 }
+
+#ifdef CONFIG_FSL_FASTBOOT
+#ifdef CONFIG_ANDROID_RECOVERY
+int is_recovery_key_pressing(void)
+{
+	return 0; /*TODO*/
+}
+#endif /*CONFIG_ANDROID_RECOVERY */
+#endif /*CONFIG_FSL_FASTBOOT */

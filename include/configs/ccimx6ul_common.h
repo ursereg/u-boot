@@ -178,21 +178,63 @@
 /* MTD (NAND) */
 #define CONFIG_SKIP_NAND_BBT_SCAN
 #define CONFIG_UBOOT_PARTITION		"bootloader"
+#define UBOOT_PART_SIZE_SMALL		3
+#define UBOOT_PART_SIZE_BIG		5
+#define ENV_PART_SIZE_SMALL		1
+#define ENV_PART_SIZE_BIG		3
 #define CONFIG_LINUX_PARTITION		"linux"
 #define CONFIG_RECOVERY_PARTITION	"recovery"
-#define CONFIG_NAND_NAME		"gpmi-nand"
-#define MTDIDS_DEFAULT			"nand0=" CONFIG_NAND_NAME
+/* Dualboot partition configuration */
+#define LINUX_A_PARTITION		"linux_a"
+#define LINUX_B_PARTITION		"linux_b"
+#define MTDPARTS_DUALBOOT_256MB		"mtdparts=" CONFIG_NAND_NAME ":" \
+					__stringify(UBOOT_PART_SIZE_SMALL) "m(" CONFIG_UBOOT_PARTITION ")," \
+					__stringify(ENV_PART_SIZE_SMALL) "m(environment)," \
+					"1m(safe)," \
+					"12m(" LINUX_A_PARTITION ")," \
+					"12m(" LINUX_B_PARTITION ")," \
+					"113m(rootfs_a)," \
+					"113m(rootfs_b)"
+#define MTDPARTS_DUALBOOT_512MB		"mtdparts=" CONFIG_NAND_NAME ":" \
+					__stringify(UBOOT_PART_SIZE_BIG) "m(" CONFIG_UBOOT_PARTITION ")," \
+					__stringify(ENV_PART_SIZE_BIG) "m(environment)," \
+					"1m(safe)," \
+					"24m(" LINUX_A_PARTITION ")," \
+					"24m(" LINUX_B_PARTITION ")," \
+					"230m(rootfs_a)," \
+					"230m(rootfs_b)"
+#define MTDPARTS_DUALBOOT_1024MB	"mtdparts=" CONFIG_NAND_NAME ":" \
+					__stringify(UBOOT_PART_SIZE_BIG) "m(" CONFIG_UBOOT_PARTITION ")," \
+					__stringify(ENV_PART_SIZE_BIG) "m(environment)," \
+					"1m(safe)," \
+					"24m(" LINUX_A_PARTITION ")," \
+					"24m(" LINUX_B_PARTITION ")," \
+					"256m(rootfs_a)," \
+					"256m(rootfs_b)"
+#define ENV_MTD_LINUX_A_INDEX		"3"
+#define ENV_MTD_LINUX_B_INDEX		"4"
+#define ENV_MTD_ROOTFS_A_INDEX		"5"
+#define ENV_MTD_ROOTFS_B_INDEX		"6"
+
 #define MTDPARTS_256MB			"mtdparts=" CONFIG_NAND_NAME ":" \
-					"3m(" CONFIG_UBOOT_PARTITION ")," \
-					"1m(environment)," \
+					__stringify(UBOOT_PART_SIZE_SMALL) "m(" CONFIG_UBOOT_PARTITION ")," \
+					__stringify(ENV_PART_SIZE_SMALL) "m(environment)," \
 					"1m(safe)," \
 					"12m(" CONFIG_LINUX_PARTITION ")," \
 					"14m(" CONFIG_RECOVERY_PARTITION ")," \
 					"122m(rootfs)," \
 					"-(update)"
+#define MTDPARTS_512MB			"mtdparts=" CONFIG_NAND_NAME ":" \
+					__stringify(UBOOT_PART_SIZE_BIG) "m(" CONFIG_UBOOT_PARTITION ")," \
+					__stringify(ENV_PART_SIZE_BIG) "m(environment)," \
+					"1m(safe)," \
+					"24m(" CONFIG_LINUX_PARTITION ")," \
+					"32m(" CONFIG_RECOVERY_PARTITION ")," \
+					"256m(rootfs)," \
+					"-(update)"
 #define MTDPARTS_1024MB			"mtdparts=" CONFIG_NAND_NAME ":" \
-					"3m(" CONFIG_UBOOT_PARTITION ")," \
-					"3m(environment)," \
+					__stringify(UBOOT_PART_SIZE_BIG) "m(" CONFIG_UBOOT_PARTITION ")," \
+					__stringify(ENV_PART_SIZE_BIG) "m(environment)," \
 					"1m(safe)," \
 					"24m(" CONFIG_LINUX_PARTITION ")," \
 					"32m(" CONFIG_RECOVERY_PARTITION ")," \
@@ -202,7 +244,14 @@
 #define CONFIG_ENV_MTD_RECOVERY_INDEX	"4"
 #define CONFIG_ENV_MTD_ROOTFS_INDEX	"5"
 #define CONFIG_ENV_MTD_UPDATE_INDEX	"6"
+
+#define CONFIG_NAND_NAME                "gpmi-nand"
+#define MTDIDS_DEFAULT                  "nand0=" CONFIG_NAND_NAME
 #define CONFIG_ENV_MTD_SETTINGS		"mtdids=" MTDIDS_DEFAULT "\0"
+/* Previous offset locations for the environment */
+#define OLD_ENV_OFFSET_1		(3 * SZ_1M)
+#define OLD_ENV_OFFSET_2		(5 * SZ_1M)
+#define OLD_ENV_OFFSET_LOCATIONS	2
 
 /* Max percentage of reserved blocks for bad block management per partition */
 #define CONFIG_MTD_UBI_MAXRSVDPEB_PCNT	4
@@ -211,10 +260,11 @@
 #define CONFIG_SUPPORTED_SOURCES	((1 << SRC_TFTP) | \
 					 (1 << SRC_NFS) | \
 					 (1 << SRC_MMC) | \
+					 (1 << SRC_USB) | \
 					 (1 << SRC_NAND) | \
 					 (1 << SRC_RAM))
 #define CONFIG_SUPPORTED_SOURCES_NET	"tftp|nfs"
-#define CONFIG_SUPPORTED_SOURCES_BLOCK	"mmc"
+#define CONFIG_SUPPORTED_SOURCES_BLOCK	"mmc|usb"
 #define CONFIG_SUPPORTED_SOURCES_NAND	"nand"
 #define CONFIG_SUPPORTED_SOURCES_RAM	"ram"
 
@@ -258,5 +308,7 @@
 #undef CONFIG_BOOTM_RTEMS
 #undef CONFIG_CMD_EXPORTENV
 #undef CONFIG_CMD_IMPORTENV
+
+#define FSL_FASTBOOT_FB_DEV "nand"
 
 #endif /* CCIMX6UL_CONFIG_H */

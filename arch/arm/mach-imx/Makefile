@@ -34,7 +34,7 @@ obj-$(CONFIG_CMD_PRIBLOB) += priblob.o
 obj-$(CONFIG_SPL_BUILD)	+= spl.o
 endif
 ifeq ($(SOC),$(filter $(SOC),imx8m imx8))
-obj-{CONFIG_IMX_OPTEE}	+= dt_optee.o
+obj-$(CONFIG_IMX_OPTEE)	+= dt_optee.o
 endif
 ifeq ($(SOC),$(filter $(SOC),mx7))
 obj-y 	+= cpu.o
@@ -201,7 +201,7 @@ u-boot-dtb-signed.imx: u-boot-dtb.imx FORCE
 	$(srctree)/scripts/sign.sh $< $@
 
 u-boot-dtb-usb-signed.imx: u-boot-dtb.imx FORCE
-	NO_DCD=y $(srctree)/scripts/sign.sh $< $@
+	ENABLE_USB_SIGN=y $(srctree)/scripts/sign.sh $< $@
 
 u-boot-dtb-encrypted.imx: u-boot-dtb.imx FORCE
 	ENABLE_ENCRYPTION=y $(srctree)/scripts/sign.sh $< $@

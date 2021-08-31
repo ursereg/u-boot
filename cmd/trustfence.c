@@ -58,6 +58,8 @@
 #define CONFIG_CSF_SIZE 0x4000
 #endif
 
+extern int rng_swtest_status;
+
 #define ALIGN_UP(x, a) (((x) + (a - 1)) & ~(a - 1))
 #define DMA_ALIGN_UP(x) ALIGN_UP(x, ARCH_DMA_MINALIGN)
 
@@ -110,6 +112,10 @@ __weak int get_dek_blob(char *output, u32 *size)
 #ifdef CONFIG_AHAB_BOOT
 extern int get_dek_blob_offset(char *address, u32 *offset);
 extern int get_dek_blob_size(char *address, u32 *size);
+extern int get_srk_revoke_mask(u32 *mask);
+#endif
+#ifdef CONFIG_ARCH_IMX8M
+extern int get_dek_blob_offset(char *address, u32 *offset);
 #endif
 
 int is_uboot_encrypted() {
@@ -151,6 +157,14 @@ void copy_dek(void)
 	u32 dek_size;
 
 	get_dek_blob(dek_blob_dst, &dek_size);
+}
+
+void copy_spl_dek(void)
+{
+	ulong loadaddr = env_get_ulong("loadaddr", 16, CONFIG_LOADADDR);
+	void *dek_blob_dst = (void *)(loadaddr - (2 * BLOB_DEK_OFFSET));
+
+	get_dek_blob(dek_blob_dst, NULL);
 }
 
 /*
@@ -228,6 +242,13 @@ __weak int revoke_key_index(int i)
 			 val);
 }
 
+#if defined(CONFIG_AHAB_BOOT)
+__weak int revoke_keys(void)
+{
+	return -1;
+}
+#endif
+
 __weak int sense_key_status(u32 *val)
 {
 	if (fuse_sense(CONFIG_TRUSTFENCE_SRK_REVOKE_BANK,
@@ -235,8 +256,8 @@ __weak int sense_key_status(u32 *val)
 			val))
 		return -1;
 
-	*val = (*val & CONFIG_TRUSTFENCE_SRK_REVOKE_MASK) >>
-		CONFIG_TRUSTFENCE_SRK_REVOKE_OFFSET;
+	*val = (*val >> CONFIG_TRUSTFENCE_SRK_REVOKE_OFFSET) &
+		CONFIG_TRUSTFENCE_SRK_REVOKE_MASK;
 
 	return 0;
 }
@@ -255,11 +276,17 @@ __weak int close_device(int confirmed)
 	enum hab_state state = 0;
 	int ret = -1;
 
-	if (hab_report_status(&config, &state) != HAB_SUCCESS) {
-		puts("[ERROR]\n There are HAB Events which will "
-		     "prevent the target from booting once closed.\n");
+	ret = hab_report_status(&config, &state);
+	if (ret == HAB_FAILURE) {
+		puts("[ERROR]\n There are HAB Events which will prevent the target from booting once closed.\n");
 		puts("Run 'hab_status' and check the errors.\n");
 		return CMD_RET_FAILURE;
+	} else if (ret == HAB_WARNING) {
+		if (rng_swtest_status == SW_RNG_TEST_FAILED) {
+			puts("[WARNING]\n There are HAB warnings which could prevent the target from booting once closed.\n");
+			puts("Run 'hab_status' and check the errors.\n");
+			return CMD_RET_FAILURE;
+		}
 	}
 
 	puts("Before closing the device DIR_BT_DIS will be burned.\n");
@@ -520,14 +547,25 @@ __weak int trustfence_status()
 	hab_rvt_report_status_t *hab_report_status = (hab_rvt_report_status_t *)HAB_RVT_REPORT_STATUS;
 	enum hab_config config = 0;
 	enum hab_state state = 0;
+	int ret;
 
 	printf("* Encrypted U-Boot:\t%s\n", is_uboot_encrypted() ?
 			"[YES]" : "[NO]");
 	puts("* HAB events:\t\t");
-	if (hab_report_status(&config, &state) == HAB_SUCCESS)
+	ret = hab_report_status(&config, &state);
+	if (ret == HAB_SUCCESS)
 		puts("[NO ERRORS]\n");
-	else
+	else if (ret == HAB_FAILURE)
 		puts("[ERRORS PRESENT!]\n");
+	else if (ret == HAB_WARNING) {
+		if (rng_swtest_status == SW_RNG_TEST_PASSED) {
+			puts("[NO ERRORS]\n");
+			puts("\n");
+			puts("Note: RNG selftest failed, but software test passed\n");
+		} else {
+			puts("[WARNINGS PRESENT!]\n");
+		}
+	}
 
 	return 0;
 }
@@ -597,6 +635,7 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 			goto err;
 		puts("[OK]\n");
 	} else if (!strcmp(op, "revoke")) {
+#if defined(CONFIG_IMX_HAB)
 		if (argc < 1)
 			return CMD_RET_USAGE;
 
@@ -618,6 +657,41 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 		if (revoke_key_index(val[0]))
 			goto err;
 		puts("[OK]\n");
+#elif defined(CONFIG_AHAB_BOOT)
+		u32 revoke_mask = 0;
+		if (get_srk_revoke_mask(&revoke_mask) == CMD_RET_SUCCESS) {
+			if (revoke_mask) {
+				printf("Following keys will be permanently revoked:\n");
+				for (int i = 0; i <= CONFIG_TRUSTFENCE_SRK_N_REVOKE_KEYS; i++) {
+					if (revoke_mask & (1 << i))
+						printf("   Key %d\n", i);
+				}
+				if (revoke_mask & (1 << CONFIG_TRUSTFENCE_SRK_N_REVOKE_KEYS)) {
+					puts("Key 3 cannot be revoked. Abort.\n");
+					return CMD_RET_FAILURE;
+				}
+			} else {
+				printf("No Keys to be revoked.\n");
+				return CMD_RET_FAILURE;
+			}
+		}
+
+		if (!confirmed && !confirm_prog())
+			return CMD_RET_FAILURE;
+
+		printf("Revoking keys...");
+		if (revoke_keys())
+			goto err;
+		puts("[OK]\n");
+		if (sense_key_status(&val[0]))
+			goto err;
+		for (int i = 0; i < CONFIG_TRUSTFENCE_SRK_N_REVOKE_KEYS; i++) {
+			if (val[0] & (1 << i))
+				printf("   Key %d revoked\n", i);
+		}
+#else
+		printf("Command not implemented\n");
+#endif
 	} else if (!strcmp(op, "status")) {
 		int key_index;
 
@@ -655,7 +729,14 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 		unsigned long dek_blob_final_dst;
 		unsigned long uboot_start;
 		u32 dek_blob_size;
+#ifdef CONFIG_AHAB_BOOT
 		u32 dek_blob_offset;
+#endif
+#ifdef CONFIG_ARCH_IMX8M
+		u32 dek_blob_spl_offset;
+		unsigned long dek_blob_spl_final_dst;
+		unsigned long fit_dek_blob_size = 96;
+#endif
 		int generate_dek_blob;
 		uint8_t *buffer = NULL;
 
@@ -681,8 +762,10 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 
 			printf("\nLoading encrypted U-Boot image...\n");
 			/* Load firmware file to RAM */
-			fwinfo.loadaddr = "$loadaddr";
-			fwinfo.filename = (fwinfo.src == SRC_MMC) ? argv[4] : argv[3];
+			strcpy(fwinfo.loadaddr, "$loadaddr");
+			strncpy(fwinfo.filename,
+				(fwinfo.src == SRC_MMC) ? argv[4] : argv[3],
+				sizeof(fwinfo.filename));
 			ret = load_firmware(&fwinfo, NULL);
 			if (ret == LDFW_ERROR) {
 				printf("Error loading firmware file to RAM\n");
@@ -699,8 +782,20 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 			}
 			dek_blob_final_dst = loadaddr + dek_blob_offset;
 #else
+#ifdef CONFIG_ARCH_IMX8M
+			ret = get_dek_blob_offset((void *)loadaddr, &dek_blob_spl_offset);
+			if (ret != 0) {
+				printf("Error getting the DEK Blob offset (%d)\n", ret);
+				return CMD_RET_FAILURE;
+			}
+			/* Get SPL dek blob memory locations */
+			dek_blob_spl_final_dst = loadaddr + dek_blob_spl_offset;
+			/* DEK blob will be inserted in the dummy DEK location of the U-Boot image */
+			dek_blob_final_dst = loadaddr + uboot_size - fit_dek_blob_size;
+#else
 			/* DEK blob will be directly appended to the U-Boot image */
 			dek_blob_final_dst = loadaddr + uboot_size;
+#endif // CONFIG_ARCH_IMX8M
 #endif
 			/*
 			 * for the DEK blob source (DEK in plain text) we use the
@@ -781,11 +876,23 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 			}
 			dek_blob_final_dst = (uintptr_t) (buffer + dek_blob_offset);
 #else
+#ifdef CONFIG_SPL
+			/* DEK blob will be directly inserted into the U-Boot image */
+			ret = get_dek_blob_offset((void *)uboot_start, &dek_blob_spl_offset);
+			if (ret != 0) {
+				printf("Error getting the SPL DEK Blob offset (%d)\n", ret);
+				return CMD_RET_FAILURE;
+			}
+			dek_blob_spl_final_dst = (uintptr_t) (buffer + dek_blob_spl_offset);
+			/* DEK blob will be added to SPL dek blob location */
+                        dek_blob_final_dst = (uintptr_t) (buffer + uboot_size - fit_dek_blob_size);
+			debug("Buffer:             [0x%p,\t0x%p]\n", buffer, buffer + DMA_ALIGN_UP(uboot_size) + 4 * DMA_ALIGN_UP(MAX_DEK_BLOB_SIZE));
+#else
 			/* DEK blob will be directly appended to the U-Boot image */
 			dek_blob_final_dst = (uintptr_t) (buffer + uboot_size);
-#endif
-
 			debug("Buffer:             [0x%p,\t0x%p]\n", buffer, buffer + DMA_ALIGN_UP(uboot_size) + 2 * DMA_ALIGN_UP(MAX_DEK_BLOB_SIZE));
+#endif // CONFIG_SPL
+#endif
 			debug("dek_blob_src:       0x%lx\n", dek_blob_src);
 			debug("dek_blob_dst:       0x%lx\n", dek_blob_dst);
 			debug("dek_blob_final_dst: 0x%lx\n", dek_blob_final_dst);
@@ -833,23 +940,40 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 			 * header (8 bytes) + random AES-256 key (32 bytes)
 			 * + DEK ('dek_size' bytes) + MAC (16 bytes)
 			 */
-			dek_blob_size = 8 + 32 + dek_size + 16
+			dek_blob_size = 8 + 32 + dek_size + 16;
 #endif
 			/* Copy DEK blob to its final destination */
-			memcpy((void *)dek_blob_final_dst, (void *)dek_blob_dst,
+                        memcpy((void *)dek_blob_final_dst, (void *)dek_blob_dst,
+                                dek_blob_size);
+#ifdef CONFIG_SPL
+			/* Copy SPL DEK blob to its final destination */
+			memcpy((void *)dek_blob_spl_final_dst, (void *)dek_blob_dst,
 				dek_blob_size);
-
+#endif
 		} else {
 			/* If !generate_dek_blob, then the DEK blob from the running
 			 * U-Boot is recovered and copied into its final
 			 * destination. (This fails if the running U-Boot does not
 			 * include a DEK)
 			 */
+#ifdef CONFIG_SPL
+			if (get_dek_blob((void *)dek_blob_spl_final_dst, &dek_blob_size)) {
+				printf("Current U-Boot does not contain an SPL DEK, and a new SPL DEK was not provided\n");
+				ret = CMD_RET_FAILURE;
+				goto tf_update_out;
+			}
 			if (get_dek_blob((void *)dek_blob_final_dst, &dek_blob_size)) {
 				printf("Current U-Boot does not contain a DEK, and a new DEK was not provided\n");
 				ret = CMD_RET_FAILURE;
 				goto tf_update_out;
 			}
+#else
+			if (get_dek_blob((void *)dek_blob_final_dst, &dek_blob_size)) {
+				printf("Current U-Boot does not contain a DEK, and a new DEK was not provided\n");
+				ret = CMD_RET_FAILURE;
+				goto tf_update_out;
+			}
+#endif
 			printf("Using current DEK\n");
 		}
 
@@ -858,9 +982,15 @@ static int do_trustfence(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[
 		sprintf(cmd_buf, "update uboot ram 0x%lx 0x%lx",
 			loadaddr, uboot_size);
 #else
+#ifdef CONFIG_SPL
+		sprintf(cmd_buf, "update uboot ram 0x%lx 0x%lx",
+                        loadaddr,
+                        uboot_size);
+#else
 		sprintf(cmd_buf, "update uboot ram 0x%lx 0x%lx",
 			loadaddr,
 			dek_blob_final_dst + dek_blob_size - loadaddr);
+#endif // CONFIG_SPL
 #endif
 		debug("\tCommand: %s\n", cmd_buf);
 		env_set("forced_update", "y");
@@ -1025,7 +1155,11 @@ U_BOOT_CMD(
 	"trustfence prog_srk [-y] <ram addr> <size in bytes> - burn SRK efuses (PERMANENT)\n"
 	"trustfence close [-y] - close the device so that it can only boot "
 			      "signed images (PERMANENT)\n"
+#if defined(CONFIG_IMX_HAB)
 	"trustfence revoke [-y] <key index> - revoke one Super Root Key (PERMANENT)\n"
+#elif defined(CONFIG_AHAB_BOOT)
+	"trustfence revoke [-y] - revoke one or more Super Root Keys as per the SRK_REVOKE_MASK given at build time in the CSF (PERMANENT)\n"
+#endif
 	"trustfence update <source> [extra-args...]\n"
 	" Description: flash an encrypted U-Boot image.\n"
 	" Arguments:\n"

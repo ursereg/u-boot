@@ -50,11 +50,13 @@
 #define FASTBOOT_MCU_FIRMWARE_PARTITION "mcu_os"
 #endif
 
+#define FASTBOOT_PARTITION_METADATA "metadata"
+
 #ifdef CONFIG_ANDROID_AB_SUPPORT
 #define FASTBOOT_PARTITION_BOOT_A "boot_a"
 #define FASTBOOT_PARTITION_RECOVERY "recovery"
 #define FASTBOOT_PARTITION_SYSTEM_A "system_a"
-#define FASTBOOT_PARTITION_BOOTLOADER "bootloader0"
+#define FASTBOOT_PARTITION_BOOTLOADER "bootloader"
 #define FASTBOOT_PARTITION_DATA "userdata"
 #define FASTBOOT_PARTITION_BOOT_B "boot_b"
 #define FASTBOOT_PARTITION_SYSTEM_B "system_b"
@@ -167,7 +169,7 @@ struct fastboot_ptentry {
 	/* The start wrt the nand part, must be multiple of nand block size */
 	unsigned int start;
 	/* The length of the partition, must be multiple of nand block size */
-	unsigned int length;
+	unsigned long length;
 	/* Controls the details of how operations are done on the partition
 	   See the FASTBOOT_PTENTRY_FLAGS_*'s defined below */
 	unsigned int flags;
@@ -226,7 +228,7 @@ bool fastboot_parts_is_slot(void);
 bool fastboot_parts_is_raw(struct fastboot_ptentry *ptn);
 
 /*get partition base name from gpt without "_a/_b"*/
-int fastboot_parts_get_name(char (*partition_base_name)[16]);
+int fastboot_parts_get_name(char (*partition_base_name)[20]);
 
 void fastboot_load_partitions(void);
 
