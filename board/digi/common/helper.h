@@ -44,11 +44,16 @@ struct load_fw {
 	char lzipaddr[20];
 	char varload[20];
 	struct part_info *part;
+	bool ubivol;
+	char ubivolname[30];
 };
 
 #define SW_RNG_TEST_FAILED 	1
 #define SW_RNG_TEST_PASSED 	2
 #define SW_RNG_TEST_NA 		3
+
+#define UBIFS_MAGIC		0x06101831
+#define SQUASHFS_MAGIC		0x73717368
 
 int confirm_msg(char *msg);
 int get_source(int argc, char * const argv[], struct load_fw *fwinfo);
@@ -79,5 +84,7 @@ u64 memsize_parse(const char *const ptr, const char **retptr);
 void set_verifyaddr(unsigned long loadaddr);
 bool validate_bootloader_image(void *loadaddr);
 int hab_event_warning_check(uint8_t *event, size_t *bytes);
-
+#ifdef CONFIG_AUTHENTICATE_SQUASHFS_ROOTFS
+int read_squashfs_rootfs(unsigned long addr, unsigned long *size);
+#endif
 #endif  /* __DIGI_HELPER_H */
