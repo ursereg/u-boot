@@ -1242,11 +1242,22 @@ int connectcore_load_fdt(ulong fdt_addr, struct dt_table_header *dtt_header)
 int read_squashfs_rootfs(unsigned long addr, unsigned long *size)
 {
 	char cmd_buf[CONFIG_SYS_CBSIZE];
-	unsigned long squashfs_size = 0, squashfs_raw_size = 0, squashfs_temp_addr = 0, squashfs_ahab_addr = 0;
+	unsigned long squashfs_size = 0, squashfs_raw_size = 0, squashfs_temp_addr = 0;
 	uint32_t *squashfs_size_addr = NULL;
 	uint32_t *squashfs_magic = NULL;
-	uint32_t *squashfs_ahab_addr_p = NULL;
-	uint32_t *p = NULL;
+#ifdef CONFIG_AHAB_BOOT
+	unsigned long squashfs_ahab_addr = 0;
+#endif
+
+#ifdef CONFIG_AHAB_BOOT
+	/* We have placed signature container at the end of the image
+	 * Now we need to put on top of the image again for
+	 * authentication.
+	 */
+	squashfs_temp_addr = addr + AHAB_CONTAINER_SIZE;
+#else
+	squashfs_temp_addr = addr;
+#endif
 
 #ifdef CONFIG_NAND_BOOT
 	int ret = 0;
@@ -1260,7 +1271,7 @@ int read_squashfs_rootfs(unsigned long addr, unsigned long *size)
 	}
 
 	/* Read squashfs header into RAM */
-	sprintf(cmd_buf, "ubi read %lx ${rootfsvol} 100", addr);
+	sprintf(cmd_buf, "ubi read %lx ${rootfsvol} 100", squashfs_temp_addr);
 	if (run_command(cmd_buf, 0)) {
 		debug("Failed to read from ubi partition\n");
 		return -1;
@@ -1285,23 +1296,14 @@ int read_squashfs_rootfs(unsigned long addr, unsigned long *size)
 		return -1;
 	}
 
-#endif /* CONFIG_NAND_BOOT */
-
-#ifdef CONFIG_AHAB_BOOT
-	/* We have placed signature container at the end of the image
-	 * Now we need to put on top of the image again for
-	 * authentication.
-	 */
-	squashfs_temp_addr = addr + AHAB_CONTAINER_SIZE;
-#else
-	squashfs_temp_addr = addr;
-#endif
 	/* read first 32 sectors of rootfs image into RAM */
 	sprintf(cmd_buf, "mmc read %lx ${rootfs_start} 20", squashfs_temp_addr);
 	if (run_command(cmd_buf, 0)) {
 		debug("Failed to read block from mmc\n");
 		return -1;
 	}
+
+#endif /* CONFIG_NAND_BOOT */
 
 	/* Check if this is a squashfs image */
 	squashfs_magic = (uint32_t *)map_sysmem(squashfs_temp_addr, 0);
