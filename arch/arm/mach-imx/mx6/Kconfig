@@ -256,6 +256,17 @@ config TARGET_CCIMX6ULSTARTER
 	select ARCH_MISC_INIT
 	select RNG_SELF_TEST
 
+config TARGET_HYDRABOX
+	bool "Hydrabox board with Digi ConnectCore 6UL"
+	depends on MX6UL
+	select BOARD_LATE_INIT
+	select SUPPORT_SPL
+	select DM
+	select DM_THERMAL
+	select BOARD_EARLY_INIT_F
+	select MCA
+	select MTD_UBI_SKIP_REATTACH
+
 config TARGET_CM_FX6
 	bool "CM-FX6"
 	depends on MX6QDL

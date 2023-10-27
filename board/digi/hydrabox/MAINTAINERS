@@ -1,0 +1,6 @@
+HYDRABOX BOARD
+M:	Mateusz Macias <mmacias@sinevo.pl>
+S:	Supported
+F:	board/digi/hydrabox/
+F:	include/configs/hydrabox.h
+F:	configs/hydrabox_defconfig
