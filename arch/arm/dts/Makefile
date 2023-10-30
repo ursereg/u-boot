@@ -921,6 +921,7 @@ dtb-$(CONFIG_MX6SX) += \
 dtb-$(CONFIG_MX6UL) += \
 	imx6ul-ccimx6ulsbc.dtb \
 	imx6ul-ccimx6ulstarter.dtb \
+	imx6ul-hydrabox.dtb \
 	imx6ul-geam.dtb \
 	imx6ul-isiot-emmc.dtb \
 	imx6ul-isiot-nand.dtb \
