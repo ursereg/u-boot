@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2012-2013 Freescale Semiconductor, Inc.
- * Copyright (C) 2013-2018 Digi International, Inc.
+ * Copyright (C) 2013-2024 Digi International, Inc.
  *
  * Configuration settings for the Freescale i.MX6Q SabreSD board.
  *
@@ -63,11 +63,6 @@
 #define OCOTP_LOCK_BANK		0
 #define OCOTP_LOCK_WORD		0
 
-/*
- * Trustfence configs
- */
-#define CONFIG_HAS_TRUSTFENCE
-
 /* Environment encryption support */
 #define CONFIG_MD5
 
@@ -124,7 +119,7 @@
 #define CONFIG_MXC_UART
 
 /* MMC Configs */
-#define CONFIG_SYS_FSL_ESDHC_ADDR      0
+#define CFG_SYS_FSL_ESDHC_ADDR      0
 
 #define CONFIG_SUPPORT_EMMC_RPMB
 #define CONFIG_SUPPORT_MMC_ECSD
@@ -153,7 +148,7 @@
 #define CONFIG_ARP_TIMEOUT     200UL
 
 /* protected environment variables (besides ethaddr and serial#) */
-#define CONFIG_ENV_FLAGS_LIST_STATIC	\
+#define CFG_ENV_FLAGS_LIST_STATIC	\
 	"wlanaddr:mc,"			\
 	"wlan1addr:mc,"			\
 	"wlan2addr:mc,"			\

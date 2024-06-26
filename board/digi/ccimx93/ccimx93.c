@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International Inc
+ * Copyright 2022-2024 Digi International Inc
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -12,13 +12,16 @@
 #include <common.h>
 #include <display_options.h>
 #include <env_internal.h>
+#include <fdt_support.h>
 #include <mmc.h>
 
 #include "../common/helper.h"
 #include "../common/hwid.h"
 #include "../common/mca.h"
+#include "../common/trustfence.h"
 
 static struct digi_hwid my_hwid;
+static u32 soc_rev;
 
 DECLARE_GLOBAL_DATA_PTR;
 
@@ -50,12 +53,18 @@ int mmc_get_bootdevindex(void)
 	}
 }
 
-#ifdef CONFIG_FSL_ESDHC_IMX
+#ifdef CONFIG_ENV_IS_IN_MMC
 int board_mmc_get_env_dev(int devno)
 {
-	return mmc_get_bootdevindex();
+	/*
+	 * Use the environment from the compile time config
+	 * regardless of the actual boot device.
+	 */
+	return CONFIG_SYS_MMC_ENV_DEV;
 }
+#endif
 
+#ifdef CONFIG_FSL_ESDHC_IMX
 bool board_has_emmc(void)
 {
 	return 1;
@@ -144,6 +153,7 @@ int ccimx93_init(void)
 		return -1;
 	}
 
+#ifdef CONFIG_MCA
 	if (board_has_mca()) {
 		mca_init();
 		mca_somver_update(&my_hwid);
@@ -151,6 +161,9 @@ int ccimx93_init(void)
 		mca_tamper_check_events();
 #endif
 	}
+#endif
+
+	soc_rev = soc_rev();
 
 	return 0;
 }
@@ -174,6 +187,10 @@ void som_default_environment(void)
 	sprintf(var, "0x%02x", my_hwid.variant);
 	env_set("module_variant", var);
 
+	/* Set soc_rev variable */
+	sprintf(var, "0x%02x", soc_rev);
+	env_set("soc_rev", var);
+
 	/* Set hwid_n variables */
 	for (i = 0; i < CONFIG_HWID_WORDS_NUMBER; i++) {
 		snprintf(var, sizeof(var), "hwid_%d", i);
@@ -184,14 +201,14 @@ void som_default_environment(void)
 
 	/* Set module_ram variable */
 	if (my_hwid.ram) {
-		u32 ram = hwid_get_ramsize(&my_hwid);
+		u64 ram = hwid_get_ramsize(&my_hwid);
 
 		if (ram >= SZ_1G) {
 			ram /= SZ_1G;
-			snprintf(var, sizeof(var), "%uGB", ram);
+			snprintf(var, sizeof(var), "%lluGB", ram);
 		} else {
 			ram /= SZ_1M;
-			snprintf(var, sizeof(var), "%uMB", ram);
+			snprintf(var, sizeof(var), "%lluMB", ram);
 		}
 		env_set("module_ram", var);
 	}
@@ -217,8 +234,6 @@ void som_default_environment(void)
 
 	/* Set 'som_overlays' variable */
 	var[0] = 0;
-	if (board_has_mca())
-		strlcat(var, "_ov_som_mca_ccimx93.dtbo,", sizeof(var));
 	if (board_has_wireless())
 		strlcat(var, "_ov_som_wifi_ccimx93.dtbo,", sizeof(var));
 	if (board_has_bluetooth())
@@ -242,8 +257,10 @@ void board_update_hwid(bool is_fuse)
 	if (ret)
 		printf("Cannot read HWID\n");
 
+#ifdef CONFIG_MCA
 	if (board_has_mca())
 		mca_somver_update(&my_hwid);
+#endif
 
 	som_default_environment();
 }
@@ -251,6 +268,13 @@ void board_update_hwid(bool is_fuse)
 void fdt_fixup_ccimx93(void *fdt)
 {
 	fdt_fixup_hwid(fdt, &my_hwid);
+
+	if (soc_rev) {
+		char hex_rev[5]; // 4 hex chars + null byte
+		snprintf(hex_rev, sizeof(hex_rev), "0x%02x", soc_rev);
+		do_fixup_by_path(fdt, "/soc", "revision", hex_rev,
+				 sizeof(hex_rev), 1);
+	}
 
 	if (board_has_wireless()) {
 		/* Wireless MACs */
@@ -285,7 +309,7 @@ void print_som_info(void)
 		printf(", Wi-Fi");
 	if (my_hwid.bt)
 		printf(", Bluetooth");
-	if (my_hwid.mca)
+	if (board_has_mca())
 		printf(", MCA");
 	if (my_hwid.crypto)
 		printf(", Crypto-auth");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Digi International Inc
+ * Copyright 2022-2024 Digi International Inc
  *
  * SPDX-License-Identifier:    GPL-2.0+
  */
@@ -67,6 +67,13 @@
 #define PHYS_SDRAM			0x80000000
 #define PHYS_SDRAM_SIZE			0x40000000  /* 1GB DDR */
 
+#define CONFIG_TRUSTFENCE_SRK_BANK			16
+#define CONFIG_TRUSTFENCE_SRK_WORDS			8
+#define CONFIG_TRUSTFENCE_SRK_WORDS_PER_BANK		8
+#define CONFIG_TRUSTFENCE_SRK_WORDS_OFFSET		0
+
+#define CONFIG_TRUSTFENCE_SRK_N_REVOKE_KEYS		3
+
 /* Pool of randomly generated UUIDs at host machine */
 #define RANDOM_UUIDS	\
 	"uuid_disk=075e2a9b-6af6-448c-a52a-3a6e69f0afff\0" \
@@ -127,7 +134,7 @@
 	"eth1addr=" DEFAULT_MAC_ETHADDR1 "\0"
 
 /* protected environment variables (besides ethaddr and serial#) */
-#define CONFIG_ENV_FLAGS_LIST_STATIC	\
+#define CFG_ENV_FLAGS_LIST_STATIC	\
 	"eth1addr:mc,"			\
 	"wlanaddr:mc,"			\
 	"wlan1addr:mc,"			\

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2021 Digi International, Inc.
+ * Copyright (C) 2016-2023 Digi International, Inc.
  * Copyright (C) 2015 Freescale Semiconductor, Inc.
  *
  * Configuration settings for the Digi ConnecCore 6UL SBC board.
@@ -28,7 +28,7 @@
 #define CONFIG_SYS_NAND_ONFI_DETECTION
 #endif
 
-#define CONFIG_SYS_FSL_USDHC_NUM	1
+#define CFG_SYS_FSL_USDHC_NUM	1
 
 /* U-Boot Environment */
 #if defined(CONFIG_ENV_IS_IN_MMC)
@@ -52,12 +52,10 @@
 #else
 # define CONFIG_ENV_PARTITION_SIZE	(1 * SZ_1M)
 #endif /* (CONFIG_DDR_MB == 1024) */
-/* The environment may use any good blocks within the "environment" partition */
-#define CONFIG_ENV_RANGE		CONFIG_ENV_PARTITION_SIZE
 
 /* Serial port */
 #define CONFIG_MXC_UART
-#define CONFIG_MXC_UART_BASE		UART5_BASE
+#define CFG_MXC_UART_BASE		UART5_BASE
 #undef CONFIG_CONS_INDEX
 #define CONFIG_CONS_INDEX		5
 #define CONSOLE_DEV			"ttymxc4"
@@ -144,6 +142,7 @@
 	"initrd_addr=0x83800000\0" \
 	"initrd_file=uramdisk.img\0" \
 	"initrd_high=0xffffffff\0" \
+	"usb_pgood_delay=2000\0" \
 	"update_addr=" __stringify(CONFIG_DIGI_UPDATE_ADDR) "\0" \
 	"mmcroot=" CONFIG_MMCROOT " rootwait rw\0" \
 	"recovery_file=recovery.img\0" \
@@ -164,13 +163,14 @@
 	"rootfstype=ubifs rw"
 #define ROOTARGS_SINGLEMTDSYSTEM_SQUASHFS \
 	"ubi.mtd=" SYSTEM_PARTITION " " \
-	"ubi.block=0,2 root=/dev/ubiblock0_2 " \
-	"rootfstype=squashfs ro"
+	"ubi.block=0,${rootfsvol} root=/dev/ubiblock0_2 "
+#define ROOTARGS_SINGLEMTDSYSTEM_SQUASHFS_B \
+	"ubi.mtd=" SYSTEM_PARTITION " " \
+	"ubi.block=0,${rootfsvol} root=/dev/ubiblock0_3 "
 #define ROOTARGS_MULTIMTDSYSTEM_SQUASHFS \
 	"ubi.mtd=${mtdbootpart} " \
 	"ubi.mtd=${mtdrootfspart} " \
-	"ubi.block=1,0 root=/dev/ubiblock1_0 " \
-	"rootfstype=squashfs ro"
+	"ubi.block=1,${rootfsvol} root=/dev/ubiblock1_0 "
 
 #define MTDPART_ENV_SETTINGS \
 	"mtdbootpart=" LINUX_PARTITION "\0" \
@@ -180,7 +180,11 @@
 	"bootargs_nand_linux=" \
 		"if test \"${singlemtdsys}\" = yes; then " \
 			"if test \"${rootfstype}\" = squashfs; then " \
-				"setenv rootargs " ROOTARGS_SINGLEMTDSYSTEM_SQUASHFS ";" \
+				"if test \"${active_system}\" = linux_b; then " \
+					"setenv rootargs " ROOTARGS_SINGLEMTDSYSTEM_SQUASHFS_B ";" \
+				"else " \
+					"setenv rootargs " ROOTARGS_SINGLEMTDSYSTEM_SQUASHFS ";" \
+				"fi;" \
 			"else " \
 				"setenv rootargs " ROOTARGS_SINGLEMTDSYSTEM_UBIFS ";" \
 			"fi;" \
@@ -231,7 +235,7 @@
 	"rootfsvol_b=" ROOTFS_B_PARTITION "\0" \
 	"active_system=" LINUX_A_PARTITION "\0"
 
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	CONFIG_COMMON_ENV \
 	CONFIG_ENV_MTD_SETTINGS \
 	DUALBOOT_ENV_SETTINGS \
@@ -248,7 +252,7 @@
 	"rootfs_file=dey-image-qt-x11-" CONFIG_SYS_BOARD ".ubifs\0" \
 	""	/* end line */
 #else
-#define CONFIG_EXTRA_ENV_SETTINGS \
+#define CFG_EXTRA_ENV_SETTINGS \
 	CONFIG_COMMON_ENV \
 	"bootcmd_mfg=fastboot " __stringify(CONFIG_FASTBOOT_USB_DEV) "\0" \
 	"loadscript=load mmc ${mmcbootdev}:${mmcpart} ${loadaddr} ${script}\0" \

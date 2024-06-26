@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2018 Digi International, Inc.
+ * Copyright (C) 2016-2024 Digi International, Inc.
  * Copyright (C) 2015 Freescale Semiconductor, Inc.
  *
  * Configuration settings for the Digi ConnecCore 6UL System-On-Module.
@@ -30,9 +30,9 @@
 #define CONFIG_SYS_LOAD_ADDR		0x80800000
 /* Physical Memory Map */
 #define PHYS_SDRAM			MMDC0_ARB_BASE_ADDR
-#define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM
-#define CONFIG_SYS_INIT_RAM_ADDR	IRAM_BASE_ADDR
-#define CONFIG_SYS_INIT_RAM_SIZE	IRAM_SIZE
+#define CFG_SYS_SDRAM_BASE		PHYS_SDRAM
+#define CFG_SYS_INIT_RAM_ADDR	IRAM_BASE_ADDR
+#define CFG_SYS_INIT_RAM_SIZE	IRAM_SIZE
 
 #define CONFIG_SYS_INIT_SP_OFFSET \
 	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
@@ -47,11 +47,6 @@
 #define CCIMX6ULSTARTER_ID129	129
 #define CCIMX6ULSBC_ID135	135
 #define CCIMX6ULSBC_ID136	136
-
-/*
- * Trustfence configs
- */
-#define CONFIG_HAS_TRUSTFENCE
 
 /* Secure boot configs */
 #define CONFIG_TRUSTFENCE_SRK_N_REVOKE_KEYS		3
@@ -103,20 +98,15 @@
 #define TRUSTFENCE_JTAG_DISABLE_DEBUG			(TRUSTFENCE_JTAG_SMODE_NO_DEBUG << TRUSTFENCE_JTAG_SMODE_OFFSET)
 
 /* MMC Configs */
-#define CONFIG_SYS_FSL_ESDHC_ADDR	USDHC2_BASE_ADDR
+#define CFG_SYS_FSL_ESDHC_ADDR	USDHC2_BASE_ADDR
 #define CONFIG_SUPPORT_EMMC_RPMB
 #define CONFIG_SUPPORT_MMC_ECSD
-
-/* Ethernet */
-#define CONFIG_FEC_MXC
-#define CONFIG_MII
-#define CONFIG_PHY_SMSC
 
 /* Extra network settings for second Ethernet */
 #define CONFIG_EXTRA_NETWORK_SETTINGS \
 	"eth1addr=" DEFAULT_MAC_ETHADDR1 "\0"
 
-#define CONFIG_ENV_FLAGS_LIST_STATIC	\
+#define CFG_ENV_FLAGS_LIST_STATIC	\
 	"eth1addr:mc,"			\
 	"wlanaddr:mc,"			\
 	"wlan1addr:mc,"			\
@@ -136,11 +126,10 @@
 
 /* PMIC */
 #define CONFIG_POWER_PFUZE3000
-#define CONFIG_POWER_PFUZE3000_I2C_ADDR	0x08
+#define CFG_POWER_PFUZE3000_I2C_ADDR	0x08
 
 /* USB Configs */
 #ifdef CONFIG_CMD_USB
-#define CONFIG_EHCI_HCD_INIT_AFTER_RESET
 #define CONFIG_USB_HOST_ETHER
 #define CONFIG_USB_ETHER_ASIX
 #define CONFIG_MXC_USB_PORTSC  (PORT_PTS_UTMI | PORT_PTS_PTW)
@@ -169,24 +158,17 @@
 
 #define ALTBOOTCMD	\
 	"altbootcmd=" \
-		"if test -z \"${active_system}\"; then " \
-			"setenv active_system " LINUX_A_PARTITION ";" \
-		"fi;" \
-		"setenv mtdbootpart ${active_system};" \
-		"if test \"${singlemtdsys}\" = yes; then " \
-			"if ubi part " SYSTEM_PARTITION "; then " \
-				"if ubifsmount ubi0:${mtdbootpart}; then " \
-					"ubifsload ${loadaddr} altboot.scr;" \
-				"fi;" \
+		"if test \"${dualboot}\" = yes; then " \
+			"if test \"${active_system}\" = linux_a; then " \
+				"setenv active_system linux_b;" \
+			"else " \
+				"setenv active_system linux_a;" \
 			"fi;" \
-		"else " \
-			"if ubi part ${mtdbootpart}; then " \
-				"if ubifsmount ubi0:${mtdbootpart}; then " \
-					"ubifsload ${loadaddr} altboot.scr;" \
-				"fi;" \
-			"fi;" \
+			"saveenv;" \
+			"echo \"## System boot failed; Switching active partitions bank to ${active_system}...\";" \
 		"fi;" \
-		"source ${loadaddr}\0"
+		"bootcount reset;" \
+		"reset;\0"
 
 /* One 'system' partition containing many UBI volumes (modern layout) */
 #define MTDPARTS_SMALL			"mtdparts=" CONFIG_NAND_NAME ":" \
@@ -254,16 +236,16 @@
 					"1m(safe)," \
 					"24m(" LINUX_A_PARTITION ")," \
 					"24m(" LINUX_B_PARTITION ")," \
-					"230m(rootfs_a)," \
-					"230m(rootfs_b)"
+					"226m(rootfs_a)," \
+					"226m(rootfs_b)"
 #define MTDPARTS_DUALBOOT_1024MB	"mtdparts=" CONFIG_NAND_NAME ":" \
 					__stringify(UBOOT_PART_SIZE_BIG) "m(" UBOOT_PARTITION ")," \
 					__stringify(ENV_PART_SIZE_BIG) "m(environment)," \
 					"1m(safe)," \
-					"24m(" LINUX_A_PARTITION ")," \
-					"24m(" LINUX_B_PARTITION ")," \
-					"256m(rootfs_a)," \
-					"256m(rootfs_b)"
+					"46m(" LINUX_A_PARTITION ")," \
+					"46m(" LINUX_B_PARTITION ")," \
+					"450m(rootfs_a)," \
+					"450m(rootfs_b)"
 
 #define MTDPARTS_256MB			"mtdparts=" CONFIG_NAND_NAME ":" \
 					__stringify(UBOOT_PART_SIZE_SMALL) "m(" UBOOT_PARTITION ")," \
@@ -300,8 +282,7 @@
 					"fi"
 
 #define CONFIG_NAND_NAME                "gpmi-nand"
-#define MTDIDS_DEFAULT                  "nand0=" CONFIG_NAND_NAME
-#define CONFIG_ENV_MTD_SETTINGS		"mtdids=" MTDIDS_DEFAULT "\0"
+#define CONFIG_ENV_MTD_SETTINGS		"mtdids=" CONFIG_MTDIDS_DEFAULT "\0"
 /* Previous offset locations for the environment */
 #define OLD_ENV_OFFSET_1		(3 * SZ_1M)
 #define OLD_ENV_OFFSET_2		(5 * SZ_1M)
@@ -351,9 +332,6 @@
 #define CONFIG_SYS_CBSIZE		1024
 #define CONFIG_SYS_HZ			1000
 #define CONFIG_SILENT_CONSOLE_UPDATE_ON_RELOC
-
-/* Print Buffer Size */
-#define CONFIG_SYS_PBSIZE (CONFIG_SYS_CBSIZE + sizeof(CONFIG_SYS_PROMPT) + 16)
 
 #undef CONFIG_BOOTM_NETBSD
 #undef CONFIG_BOOTM_PLAN9

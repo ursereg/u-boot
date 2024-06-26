@@ -3,7 +3,7 @@
 #
 #  sign_spl_fit.sh
 #
-#  Copyright (C) 2020 by Digi International Inc.
+#  Copyright (C) 2020-2023 by Digi International Inc.
 #  All rights reserved.
 #
 #  This program is free software; you can redistribute it and/or modify it
@@ -21,7 +21,7 @@
 #				  field so that key revocation is possible in closed devices.
 #      ENABLE_ENCRYPTION: (optional) enable encryption of the images.
 #      CONFIG_DEK_PATH: (mandatory if ENCRYPT is defined) path to a Data Encryption Key.
-#                       If defined, the signed	U-Boot image is encrypted with the
+#                       If defined, the signed U-Boot image is encrypted with the
 #                       given key. Supported key sizes: 128 bits.
 #      CONFIG_MKIMAGE_LOG_PATH: (optional) path to the log generated when
 #                               imx-boot was compiled. If not provided, a default
@@ -172,7 +172,7 @@ spl_decrypt_len="$(printf "0x%X" ${spl_decrypt_len})"
 uboot_dtb_image_len="$(printf "0x%X" ${uboot_dtb_image_len})"
 
 # SED filter for removing TEE entries on boot artifacts without TEE
-if grep -qsi "tee.*not[[:blank:]]\+found" "${MKIMAGE_FIT_HAB_LOG}"; then
+if grep -qsi "tee.*not[[:blank:]]\+found\|not[[:blank:]]\+find.*tee" "${MKIMAGE_FIT_HAB_LOG}"; then
 	NO_TEE_SED_FILTER="/%atf_\(auth\|decrypt\)_start%/s/, \\\\$//g;/%optee_\(auth\|decrypt\)_start%/d"
 fi
 
@@ -368,24 +368,26 @@ else
 	fi
 
 	# Create final CSF for SPL
+	hab_tag_mac="AC00244"
+	nonce_mac_size="36"
 	csf_size="$(stat -L -c %s csf_spl_enc.bin)"
-	nonce_offset="$((csf_size - 36))"
+	nonce_offset="$(hexdump -ve '1/1 "%.2X"' csf_spl_enc.bin | grep -ob -e "${hab_tag_mac}" | awk -F: '{gsub(/ /, ""); print int($1/2)}')"
 	echo "SPL ENC csf_size: ${csf_size} / nonce_offset: ${nonce_offset}"
-	dd if=csf_spl_enc.bin of=noncemac.bin bs=1 skip=${nonce_offset} count=36
+	dd if=csf_spl_enc.bin of=noncemac.bin bs=1 skip=${nonce_offset} count="${nonce_mac_size}" conv=notrunc
 	csf_size="$(stat -L -c %s csf_spl_sign_enc.bin)"
-	nonce_offset="$((csf_size - 36))"
+	nonce_offset="$(hexdump -ve '1/1 "%.2X"' csf_spl_sign_enc.bin | grep -ob -e "${hab_tag_mac}" | awk -F: '{gsub(/ /, ""); print int($1/2)}')"
 	echo "SPL SIGN ENC csf_size: ${csf_size} / nonce_offset: ${nonce_offset}"
-	dd if=noncemac.bin of=csf_spl_sign_enc.bin bs=1 seek=${nonce_offset} count=36
+	dd if=noncemac.bin of=csf_spl_sign_enc.bin bs=1 seek=${nonce_offset} count="${nonce_mac_size}" conv=notrunc
 
 	# Create final CSF for FIT
 	csf_size="$(stat -L -c %s csf_fit_enc.bin)"
-	nonce_offset="$((csf_size - 36))"
+	nonce_offset="$(hexdump -ve '1/1 "%.2X"' csf_fit_enc.bin | grep -ob -e "${hab_tag_mac}" | awk -F: '{gsub(/ /, ""); print int($1/2)}')"
 	echo "FIT ENC csf_size: ${csf_size} / nonce_offset: ${nonce_offset}"
-	dd if=csf_fit_enc.bin of=noncemac.bin bs=1 skip=${nonce_offset} count=36
+	dd if=csf_fit_enc.bin of=noncemac.bin bs=1 skip=${nonce_offset} count="${nonce_mac_size}" conv=notrunc
 	csf_size="$(stat -L -c %s csf_fit_sign_enc.bin)"
-	nonce_offset="$((csf_size - 36))"
+	nonce_offset="$(hexdump -ve '1/1 "%.2X"' csf_fit_sign_enc.bin | grep -ob -e "${hab_tag_mac}" | awk -F: '{gsub(/ /, ""); print int($1/2)}')"
 	echo "FIT SIGN ENC csf_size: ${csf_size} / nonce_offset: ${nonce_offset}"
-	dd if=noncemac.bin of=csf_fit_sign_enc.bin bs=1 seek=${nonce_offset} count=36
+	dd if=noncemac.bin of=csf_fit_sign_enc.bin bs=1 seek=${nonce_offset} count="${nonce_mac_size}" conv=notrunc
 
 	cp flash-spl-fit-enc.bin "${TARGET}"
 	dd if="${CURRENT_PATH}/csf_spl_sign_enc.bin" of="${TARGET}" seek=$((spl_csf_offset)) bs=1 conv=notrunc >/dev/null 2>&1
