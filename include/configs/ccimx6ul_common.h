@@ -244,15 +244,21 @@
 					"450m(rootfs_b)," \
 					"-(data)"
 
+/*
+ * hydrabox override: Digi's stock 256M layout is 16m/20m/140m linux/recovery/
+ * rootfs + 70m update + -(data). hydrabox reproduces the fielded DEY 3.0 layout
+ * (12m/14m/122m + -(update), no data partition) so one .swu serves both the
+ * fielded fleet (frozen 3.0 layout, u-boot not reflashable OTA) and new
+ * same-hardware units. Selected by default: singlemtdsys=no + dualboot=no.
+ */
 #define MTDPARTS_256MB			"mtdparts=" CONFIG_NAND_NAME ":" \
 					__stringify(UBOOT_PART_SIZE_SMALL) "m(" UBOOT_PARTITION ")," \
 					__stringify(ENV_PART_SIZE_SMALL) "m(environment)," \
 					"1m(safe)," \
-					"16m(" LINUX_PARTITION ")," \
-					"20m(" RECOVERY_PARTITION ")," \
-					"140m(" ROOTFS_PARTITION ")," \
-					"70m(update)," \
-					"-(data)"
+					"12m(" LINUX_PARTITION ")," \
+					"14m(" RECOVERY_PARTITION ")," \
+					"122m(" ROOTFS_PARTITION ")," \
+					"-(" UPDATE_PARTITION ")"
 #define MTDPARTS_512MB			"mtdparts=" CONFIG_NAND_NAME ":" \
 					__stringify(UBOOT_PART_SIZE_BIG) "m(" UBOOT_PARTITION ")," \
 					__stringify(ENV_PART_SIZE_BIG) "m(environment)," \
