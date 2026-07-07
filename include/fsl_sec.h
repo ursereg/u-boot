@@ -65,6 +65,18 @@ struct rng4tst {
 #define RTSDCTL_ENT_DLY_MAX	25000
 #define RTFRQMIN		5000
 #define RTFRQMAX		10000
+#elif defined(CONFIG_MX6UL) || defined(CONFIG_MX6ULL)
+/*
+ * i.MX6UL/ULL: u-boot instantiates RNG4 with prediction resistance
+ * (OP_ALG_PR_ON), which needs a high TRNG entropy delay to succeed. The generic
+ * 3200 start intermittently fails instantiation (RNG hw error 0x2000025b); the
+ * kernel then falls back to a non-prediction-resistance instantiation whose
+ * warm-reset teardown/re-instantiate deadlocks (~7% of warm reboots, hangs early
+ * kernel at CAAM RNG4). Start at the i.MX6SX-proven 12000 with headroom to climb
+ * so u-boot's PR instantiation succeeds and the kernel leaves the RNG untouched.
+ */
+#define RTSDCTL_ENT_DLY		12000
+#define RTSDCTL_ENT_DLY_MAX	25000
 #else
 #define RTSDCTL_ENT_DLY		3200
 #define RTSDCTL_ENT_DLY_MAX	12800
